@@ -5,13 +5,13 @@ MEMORY {
     RAM (rwx) : ORIGIN = 0x20000000, LENGTH = 64K
 }
 
-/* Top of the stack */ 
 _estack = ORIGIN(RAM) + LENGTH(RAM);
 
 SECTIONS {
 
     .text : {
         . = ALIGN(4);
+        KEEP(*(.isr_vector))
         *(.text)
         *(.text*)
         *(.rodata)

@@ -1,0 +1,18 @@
+#include <stdint.h>
+
+extern int main(void);
+void Reset_Handler(void);
+
+extern uint32_t _estack;
+
+__attribute__((section(".isr_vector"), used))
+void (*const vector_table[])(void) = {
+    (void (*)(void))&_estack,
+    Reset_Handler
+};
+
+void Reset_Handler(void) {
+    main();
+
+    while (1) {}
+}

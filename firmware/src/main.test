@@ -1,0 +1,23 @@
+#include <stdint.h>
+
+#define UART0_DR *((volatile uint32_t *)0x4000C000)
+
+void uart_putc(char c) {
+    UART0_DR = (uint32_t)c;
+}
+
+void uart_puts(const char *str) {
+    while (*str) {
+        uart_putc(*str++);
+    }
+}
+
+int main(void) {
+    uart_puts("HAVEN firmware booted!\n");
+
+    while (1) {
+        __asm__("nop");
+    }
+
+    return 0;
+}
