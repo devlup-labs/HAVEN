@@ -1,0 +1,1 @@
+//reset handler to call main
