@@ -22,8 +22,8 @@ void Reset_Handler(void){
     
     // copy variabkes from FLASH to RAM
     uint32_t *src, *dst;
-    *src = _sidata;
-    *dst = _sdata;
+    src = &_sidata;
+    dst = &_sdata;
 
     while(dst < &_edata){
         *dst = *src;
@@ -33,7 +33,7 @@ void Reset_Handler(void){
 
 
     //set uninitialized values to 0
-    dst = _sbss;
+    dst = &_sbss;
     while(dst < &_ebss){
         *dst = 0;
         dst++;
