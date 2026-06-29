@@ -1,13 +1,12 @@
-
+import hmac
+import hashlib
 #M3
 def compute_K_AB(node_a, node_b, matrix ,spaces_a, spaces_b):
+    pass
     
 
 
 # ****************M2************
-import hmac
-import hashlib
-
 def assign_space(node_id: int,k:int, m:int ,K_master :bytes) -> list[int]:
 
   message = b'spaces' + node_id.to_bytes(2, 'big')
@@ -24,8 +23,7 @@ def assign_space(node_id: int,k:int, m:int ,K_master :bytes) -> list[int]:
       if(len(spaces)==k):
         break
   return spaces 
-import hmac
-import hashlib
+
 
 def assign_spaces(node_id: int,k:int, m:int ,K_master :bytes) -> list[int]:
 
