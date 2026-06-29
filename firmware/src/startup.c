@@ -1,6 +1,6 @@
 #include<stdint.h>
 
-extern void main(void);
+extern int main(void);
 void Reset_Handler(void);
 
 extern uint32_t _estack;
@@ -20,7 +20,7 @@ void(*const vector_table[])(void) = {
 //RESET_HANDLER
 void Reset_Handler(void){
     
-    // copy variabkes from FLASH to RAM
+    // copy variables from FLASH to RAM
     uint32_t *src, *dst;
     src = &_sidata;
     dst = &_sdata;
@@ -41,4 +41,7 @@ void Reset_Handler(void){
     
     //call main
     main();
+
+    // fallback infinite loop
+    while(1);
 }

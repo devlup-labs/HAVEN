@@ -12,7 +12,7 @@ cmake --build build
 
 if [ -f build/haven.elf ]; then
     echo "Done!"
-    exit 1
+    exit 0
 else
     echo "Failed!"
     exit 1
