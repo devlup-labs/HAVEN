@@ -1,7 +1,8 @@
 #!/bin/bash
 
 set -e
-cd firmware
+# Navigate to the directory containing this script
+cd "$(dirname "$0")"
 
 if [ "$1" == "-c" ]; then
     rm -rf build
