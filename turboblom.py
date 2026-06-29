@@ -1,6 +1,7 @@
 import hmac
 import hashlib
-#                                          M3
+
+#M3
 def compute_K_AB(node_id_a: int, node_id_b: int, K_master: bytes, spaces_a: list[int], spaces_b: list[int]):
   shared = sorted(set(spaces_a) & set(spaces_b))
   if not shared:
@@ -17,11 +18,18 @@ def compute_K_AB(node_id_a: int, node_id_b: int, K_master: bytes, spaces_a: list
   return result
 def test_M2_M3():
   K = bytes(range(32))
-  spaces_a =  assign_spaces(1, 5, 50, K)   # M2's function
-  spaces_b =  assign_spaces(2, 5, 50, K)
+  spaces_a =  assign_space(1, 5, 50, K)    # M2's function
+  spaces_b =  assign_space(2, 5, 50, K) 
 
   key_ab = compute_K_AB(1, 2, K, spaces_a, spaces_b)
   key_ba = compute_K_AB(2, 1, K, spaces_b, spaces_a)
+  
+  if(key_ab == None):
+    print("no space matched")
+    print(assign_space(1,5,50,K) ,"space 1")
+    print(assign_space(2,5,50,K),"space 2")
+    return 0
+  
 
   print(key_ab.hex())
   print(key_ba.hex())
