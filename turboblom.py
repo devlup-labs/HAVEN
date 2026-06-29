@@ -17,8 +17,8 @@ def compute_K_AB(node_id_a: int, node_id_b: int, K_master: bytes, spaces_a: list
   return result
 def test_M2_M3():
   K = bytes(range(32))
-  spaces_a = list[assign_spaces(1, 5, 50, K)]   # M2's function
-  spaces_b = list[assign_spaces(2, 5, 50, K)]
+  spaces_a =  assign_spaces(1, 5, 50, K)   # M2's function
+  spaces_b =  assign_spaces(2, 5, 50, K)
 
   key_ab = compute_K_AB(1, 2, K, spaces_a, spaces_b)
   key_ba = compute_K_AB(2, 1, K, spaces_b, spaces_a)
