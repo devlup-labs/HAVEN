@@ -1,5 +1,8 @@
 import pytest
-from sim.turboblom import generate_key_matrix, assign_spaces, compute_K_AB
+try:
+    from sim.turboblom import generate_key_matrix, assign_spaces, compute_K_AB
+except ModuleNotFoundError:
+    from turboblom import generate_key_matrix, assign_spaces, compute_K_AB
 
 def test_generate_key_matrix():
     seed = bytes(range(32))

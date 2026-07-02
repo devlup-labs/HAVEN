@@ -3,7 +3,10 @@ import networkx as nx
 import numpy as np
 import hashlib
 import hmac
-from turboblom import assign_spaces
+try:
+    from sim.turboblom import assign_spaces
+except ModuleNotFoundError:
+    from turboblom import assign_spaces
 
 # Parameters
 N_NODES = 50
@@ -206,7 +209,7 @@ def simulate_node_capture(node_spaces,edges,trials=1000,capture_count=5):
 def main():
     print("=== Layer 1: Connectivity Simulation (10 Runs) ===")
     
-    connectivity_values=[]
+    connectivity_values = []
 
     for i in range(10):
         (
@@ -226,10 +229,11 @@ def main():
             f"Connectivity={ratio*100:.2f}%"
         )
 
-        print(
-            "\nAverage connectivity:",
-            f"{np.mean(connectivity_values)*100:.2f}%"
-        )
+    avg_connectivity = np.mean(connectivity_values)
+    print(f"\nAverage connectivity over 10 runs: {avg_connectivity*100:.2f}%")
+    print(f"Theoretical sharing probability: ~42.34% (Hypergeometric: 1 - comb(45, 5) / comb(50, 5))")
+    print(f"Note: The sprint brief's 'roughly 50-60%' estimate likely comes from a naive Union Bound approximation")
+    print(f"      (e.g., k * (k / m) = 5 * 0.10 = 50%), which overestimates due to ignoring overlap.")
 
     print("\n=== Layer 2: Node Capture & Security Simulation (1000 Trials) ===")
     
@@ -238,7 +242,7 @@ def main():
 
     edges = list(G.edges)
 
-    naive, blom = simulate_node_capture(spaces,edges,trials=1000,capture_count=5)
+    naive, blom = simulate_node_capture(spaces, edges, trials=1000, capture_count=5)
 
     print("Captured nodes: 5")
 
