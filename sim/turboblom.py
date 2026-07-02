@@ -11,7 +11,7 @@ def generate_key_matrix(m: int, seed: bytes) -> list[bytes]:
     for i in range(m):
         # Derive 32 bytes for each row using HMAC-SHA256 with seed as key
         # and the row index as message.
-        msg = i.to_bytes(4, 'big')
+        msg = b'row' + i.to_bytes(2, 'big')
         row = hmac.new(seed, msg, hashlib.sha256).digest()
         matrix.append(row)
     return matrix

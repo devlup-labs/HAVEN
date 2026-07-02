@@ -3,7 +3,10 @@ import networkx as nx
 import numpy as np
 import hashlib
 import hmac
-from sim.turboblom import assign_spaces
+try:
+    from sim.turboblom import assign_spaces
+except ModuleNotFoundError:
+    from turboblom import assign_spaces
 
 # Parameters
 N_NODES = 50
@@ -35,10 +38,21 @@ def run_connectivity_simulation():
         if len(shared) >= 1:
             sharing_pairs += 1
             
-    connectivity_ratio = sharing_pairs / total_pairs if total_pairs > 0 else 0
-    return total_pairs, sharing_pairs, connectivity_ratio
+    connectivity = (
+        sharing_pairs / total_pairs
+        if total_pairs > 0
+        else 0
+    )
 
-def run_compromise_trial(node_spaces, edges):
+    return (
+        G,
+        node_spaces,
+        total_pairs,
+        sharing_pairs,
+        connectivity
+    )
+
+def capture_nodes(node_spaces,n_captured):
     """
     Simulates capturing 10% of nodes (5 nodes) and calculates link compromise rates.
     We compare two models:
@@ -49,82 +63,216 @@ def run_compromise_trial(node_spaces, edges):
        a space and that space is compromised.
     """
     # Pick 5 random captured nodes (10% of 50 nodes)
-    captured_nodes = random.sample(range(N_NODES), int(0.1 * N_NODES))
+    captured = random.sample(list(node_spaces.keys()),n_captured)
     
     # Track how many times each space is known by captured nodes
-    space_counts = {s: 0 for s in range(M_SPACES)}
-    captured_spaces = set()
-    for node in captured_nodes:
-        for space in node_spaces[node]:
-            space_counts[space] += 1
-            captured_spaces.add(space)
+    known_spaces = set()
+
+    for node in captured:
+        known_spaces.update(node_spaces[node])
+
+    return captured, known_spaces
             
-    # Compromised spaces based on Blom's threshold (>= lambda + 1)
-    compromised_spaces_blom = {s for s, count in space_counts.items() if count >= LAMBDA_THRESHOLD + 1}
-    
+def check_link_compromise(edges,node_spaces,known_spaces):
+    #Checks which links are broken.
+
     total_links = 0
-    compromised_links_naive = 0
-    compromised_links_blom = 0
+    compromised = 0
     
     for u, v in edges:
-        shared = set(node_spaces[u]) & set(node_spaces[v])
-        if len(shared) >= 1:
+        shared = (set(node_spaces[u]) & set(node_spaces[v]))
+
+        if shared:
             total_links += 1
-            # Naive model: compromised if any shared space is known by any captured node
-            if shared & captured_spaces:
-                compromised_links_naive += 1
-            # Blom model: compromised if any shared space is cryptographically compromised
-            if shared & compromised_spaces_blom:
-                compromised_links_blom += 1
-                
-    return total_links, compromised_links_naive, compromised_links_blom
+
+            # attacker knows the space
+            if shared & known_spaces:
+                compromised += 1
+
+    return compromised, total_links
+
+def check_blom_compromise(edges,node_spaces,captured_nodes):
+    """
+    Blom model.
+    A space is compromised only if lambda + 1 captured nodes know it.
+    """
+
+    space_count = {
+        s:0
+        for s in range(M_SPACES)
+    }
+
+    for node in captured_nodes:
+        for s in node_spaces[node]:
+            space_count[s] += 1
+
+    compromised_spaces = {
+        s
+        for s,count in space_count.items()
+
+        if count >= LAMBDA_THRESHOLD + 1
+    }
+
+    compromised = 0
+    total = 0
+
+    for u,v in edges:
+        shared = (
+            set(node_spaces[u])
+            &
+            set(node_spaces[v])
+        )
+
+        if shared:
+            total += 1
+
+            if shared & compromised_spaces:
+                compromised += 1
+
+    return compromised,total
+
+def simulate_node_capture(node_spaces,edges,trials=1000,capture_count=5):
+    """
+    Simulate attacker capturing 5 nodes and calculate link compromise rate.
+    """
+
+    naive_rates = []
+    blom_rates = []
+
+    for _ in range(trials):
+        # attacker captures nodes
+        captured_nodes = random.sample(
+            list(node_spaces.keys()),
+            capture_count
+        )
+
+        # spaces known to attacker
+        known_spaces = set()
+
+        for node in captured_nodes:
+            known_spaces.update(
+                node_spaces[node]
+            )
+
+        # Naive model
+
+        naive_compromised = 0
+        total_links = 0
+
+        for u,v in edges:
+            shared = (set(node_spaces[u]) & set(node_spaces[v]))
+
+            if shared:
+                total_links += 1
+
+                if shared & known_spaces:
+                    naive_compromised += 1
+
+        if total_links:
+            naive_rates.append(naive_compromised / total_links)
+
+        # Blom model
+
+        space_count = {
+            s:0
+            for s in range(M_SPACES)
+        }
+
+        for node in captured_nodes:
+            for s in node_spaces[node]:
+                space_count[s] += 1
+
+        compromised_spaces = {
+            s
+            for s,count in space_count.items()
+
+            if count >= LAMBDA_THRESHOLD + 1
+        }
+
+        blom_compromised = 0
+        total_links = 0
+
+        for u,v in edges:
+            shared = (set(node_spaces[u]) & set(node_spaces[v]))
+
+            if shared:
+                total_links += 1
+
+                if shared & compromised_spaces:
+                    blom_compromised += 1
+
+        if total_links:
+            blom_rates.append(blom_compromised / total_links)
+
+    return (np.mean(naive_rates), np.mean(blom_rates))
 
 def main():
     print("=== Layer 1: Connectivity Simulation (10 Runs) ===")
-    connectivities = []
-    total_pairs_list = []
-    sharing_pairs_list = []
     
+    connectivity_values = []
+
     for i in range(10):
-        total_p, sharing_p, ratio = run_connectivity_simulation()
-        connectivities.append(ratio)
-        total_pairs_list.append(total_p)
-        sharing_pairs_list.append(sharing_p)
-        print(f"Run {i+1:2d}: Total pairs in range = {total_p:3d}, Sharing pairs = {sharing_p:3d}, Connectivity = {ratio*100:5.2f}%")
-        
-    avg_connectivity = np.mean(connectivities)
-    print(f"Average connectivity over 10 runs: {avg_connectivity*100:.2f}%")
-    print(f"Expected connectivity (theoretical): ~42.3% (pure random)")
-    
+        (
+            G,
+            spaces,
+            total,
+            sharing,
+            ratio
+        ) = run_connectivity_simulation()
+
+        connectivity_values.append(ratio)
+
+        print(
+            f"Run {i+1:2}: "
+            f"Pairs={total:3} "
+            f"Shared={sharing:3} "
+            f"Connectivity={ratio*100:.2f}%"
+        )
+
+    avg_connectivity = np.mean(connectivity_values)
+    print(f"\nAverage connectivity over 10 runs: {avg_connectivity*100:.2f}%")
+    print(f"Theoretical sharing probability: ~42.34% (Hypergeometric: 1 - comb(45, 5) / comb(50, 5))")
+    print(f"Note: The sprint brief's 'roughly 50-60%' estimate likely comes from a naive Union Bound approximation")
+    print(f"      (e.g., k * (k / m) = 5 * 0.10 = 50%), which overestimates due to ignoring overlap.")
+
     print("\n=== Layer 2: Node Capture & Security Simulation (1000 Trials) ===")
+    
     # Generate one stable graph for the 1000 security trials
-    G = nx.random_geometric_graph(N_NODES, RADIUS)
-    node_spaces = {node: assign_spaces(node, K_SPACES_PER_NODE, M_SPACES, K_MASTER) for node in G.nodes}
+    G, spaces, _, _, _ = run_connectivity_simulation()
+
     edges = list(G.edges)
-    
-    naive_compromise_rates = []
-    blom_compromise_rates = []
-    
-    for _ in range(1000):
-        total_l, comp_n, comp_b = run_compromise_trial(node_spaces, edges)
-        if total_l > 0:
-            naive_compromise_rates.append(comp_n / total_l)
-            blom_compromise_rates.append(comp_b / total_l)
-            
-    avg_naive_rate = np.mean(naive_compromise_rates)
-    avg_blom_rate = np.mean(blom_compromise_rates)
-    
-    print(f"Average Naive Link Compromise Rate: {avg_naive_rate*100:.4f}%")
-    print(f"Average Blom (lambda={LAMBDA_THRESHOLD}) Link Compromise Rate: {avg_blom_rate*100:.4f}%")
-    
+
+    naive, blom = simulate_node_capture(spaces, edges, trials=1000, capture_count=5)
+
+    print("Captured nodes: 5")
+
+    print(
+        f"Average Naive Link Compromise Rate: "
+        f"{naive*100:.4f}%"
+    )
+
+    print(
+        f"Average Blom Link Compromise Rate: "
+        f"{blom*100:.4f}%"
+    )
+
     # Zhao 2019 Theoretical Prediction comparison
     # Under Blom's scheme, the probability of a space being compromised when 5 nodes are captured is:
     # P_comp_space = P(Binomial(5, 5/50) >= 4) = 5 * (0.1)^4 * 0.9 + (0.1)^5 = 0.00046 (0.046%)
-    zhao_prediction = 0.00046
-    print(f"Zhao 2019 Theoretical Prediction for link compromise: {zhao_prediction*100:.4f}%")
-    print(f"Is Blom compromise rate under 1%? {'YES' if avg_blom_rate < 0.01 else 'NO'}")
 
-if __name__ == '__main__':
+    zhao_prediction = 0.00046
+
+    print(
+        f"Zhao prediction: "
+        f"{zhao_prediction*100:.4f}%"
+    )
+
+    print(
+        "Security Test:",
+        "PASS" if blom < 0.01 else "FAIL"
+    )
+
+if __name__ == "__main__":
     # Set seed for reproducible results if desired, or let it be random
     random.seed(42)
     np.random.seed(42)
