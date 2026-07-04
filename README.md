@@ -44,13 +44,18 @@ Tested on **Ubuntu 22.04 / 24.04**. Run these once.
 
 ### Clone and Submodule Initialization
 
-To clone the repository and initialize all required submodules (including mbedTLS for firmware cryptography), run:
+* **For a fresh clone**:
+  ```bash
+  git clone https://github.com/devlup-labs/HAVEN
+  cd HAVEN
+  git submodule update --init --recursive
+  ```
 
-```bash
-git clone https://github.com/devlup-labs/HAVEN
-cd HAVEN
-git submodule update --init --recursive
-```
+* **For an existing clone** (if you have already cloned the repository):
+  ```bash
+  git pull origin main
+  git submodule update --init --recursive
+  ```
 
 ### System Dependencies
 
