@@ -1,0 +1,3 @@
+[submodule "firmware/mbedtls"]
+	path = firmware/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls
