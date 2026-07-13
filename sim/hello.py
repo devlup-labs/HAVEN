@@ -23,7 +23,7 @@ def test():
     print(req2['nonce_a'].hex())   # different from req1
     assert req1['nonce_a'] != req2['nonce_a']   # MUST PASS
     assert len(req1['mac']) == 16 
-    print("test successfull")
+    print("M1 test pass")
 test()
 
 def send_hello_resp(node_id_b: int, node_id_a: int, K_AB: bytes, hello_req: dict) -> dict | None:
@@ -62,6 +62,6 @@ def test_hello_resp():
     bad_req['mac'] = bytes([req['mac'][0] ^ 0xFF]) + req['mac'][1:]
     assert send_hello_resp(2, 1, K_AB, bad_req) is None # MUST PASS
 
-    print("test pass")
+    print("M2 test pass")
 
 test_hello_resp()
