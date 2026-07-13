@@ -15,11 +15,13 @@ int compute_K_AB(
 ) {
     uint8_t id_low = node_a < node_b ? node_a : node_b;
     uint8_t id_high = node_a > node_b ? node_a : node_b;
+    unsigned int shared_count = 0;
     
-    uint8_t xor_sum[32];
-    uint8_t payload[40];
-    memset(xor_sum, 0, 32);
-    int shared_count = 0;
+    // Shared buffers
+    uint8_t xor_sum[32];    // Used for XOR sum and later as buffer for hash output
+    uint8_t payload[40];    // Used as buffer for row-wise operation and for final payload
+
+    memset(xor_sum, 0, 32);     // Setting variable state to 0
 
     for (int i = 0; i < k; i++) {
         for (int j = 0; j < k; j++) {
@@ -30,12 +32,11 @@ int compute_K_AB(
                     (spaces_a[i] >> 8) & 0xFF, spaces_a[i] & 0xFF
                 };
 
-                uint8_t row[32];
-                // 32 byte row fed into buffer
-                haven_hmac(seed, 32, msg, 5, row);
+                // Row-wise operations in payload, payload contains row data
+                haven_hmac(seed, 32, msg, 5, payload);
 
                 for (int b = 0; b < 32; b++) {
-                    xor_sum[b] ^= row[b];
+                    xor_sum[b] ^= payload[b];
                 }
 
                 shared_count++;
@@ -48,6 +49,7 @@ int compute_K_AB(
     }
 
     else {
+        // Data from 'xor_sum' copied into first 32 bytes payload, 'xor_sum' is redundant
         memcpy(payload, xor_sum, 32);
 
         // Conversion to big endian
@@ -61,10 +63,9 @@ int compute_K_AB(
         payload[38] = (id_high >> 8) & 0xFF;
         payload[39] = (id_high) & 0xFF;
 
-        uint8_t hashed[32];
-
-        mbedtls_sha256_ret(payload, 40, hashed, 0);
-        memcpy(out_key, hashed, 16);
+        //Using 'xor_sum' as a buffer to hold sha256 hash of payload
+        mbedtls_sha256_ret(payload, 40, xor_sum, 0);
+        memcpy(out_key, xor_sum, 16);
         return 0;
     }
 }
