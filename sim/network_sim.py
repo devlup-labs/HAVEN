@@ -206,6 +206,44 @@ def simulate_node_capture(node_spaces,edges,trials=1000,capture_count=5):
 
     return (np.mean(naive_rates), np.mean(blom_rates))
 
+def simulate_auth_capture(G, node_spaces, n_captured):
+    """
+    Simulate authentication compromise under node capture.
+
+    A communication link is authenticated if the two nodes share at least one space.
+
+    A link is considered compromised if the attacker knows ALL the shared spaces required to reconstruct
+    the pairwise key, matching the behaviour of compute_K_AB().
+    """
+
+    # Attacker captures random nodes
+    captured_nodes, known_spaces = capture_nodes(
+        node_spaces,
+        n_captured
+    )
+
+    auth_links = 0
+    compromised = 0
+
+    for u, v in G.edges():
+
+        shared = set(node_spaces[u]) & set(node_spaces[v])
+
+        # Nodes cannot authenticate
+        if not shared:
+            continue
+
+        auth_links += 1
+
+        # Attacker can compute K_AB only if every shared space is known.
+        if shared.issubset(known_spaces):
+            compromised += 1
+
+    if auth_links == 0:
+        return 0.0
+
+    return compromised / auth_links
+
 def main():
     print("=== Layer 1: Connectivity Simulation (10 Runs) ===")
     
@@ -271,6 +309,23 @@ def main():
         "Security Test:",
         "PASS" if blom < 0.01 else "FAIL"
     )
+
+    print("\n=====AUTHENTICATION UNDER NODE CAPTURE =====\n")
+
+    capture_levels = [1, 2, 3, 4, 5, 6, 8, 10, 15]
+
+    print(f"{'Captured':>10} {'%Captured':>12} {'Compromised':>18}")
+
+    for n in capture_levels:
+
+        rates = [
+            simulate_auth_capture(G, spaces, n)
+            for _ in range(500)
+        ]
+
+        avg = np.mean(rates) * 100
+
+        print(f"{n:>10} {(n/N_NODES)*100:>11.1f}% {avg:>17.2f}%")
 
 if __name__ == "__main__":
     # Set seed for reproducible results if desired, or let it be random
