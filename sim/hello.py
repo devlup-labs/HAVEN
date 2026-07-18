@@ -65,3 +65,36 @@ def test_hello_resp():
     print("M2 test pass")
 
 test_hello_resp()
+
+def verify_hello_resp(node_id_a: int, K_AB: bytes, nonce_a: bytes, hello_resp: dict) -> dict | None:
+    node_id_b = hello_resp['node_id_b']
+
+    if hello_resp['nonce_a'] != nonce_a:
+        return None   
+
+    resp_msg = (b'HELLO_RESP'
+                + node_id_b.to_bytes(2, 'big')
+                + node_id_a.to_bytes(2, 'big')
+                + nonce_a
+                + hello_resp['nonce_b'])
+    expected = hmac.new(K_AB, resp_msg, hashlib.sha256).digest()[:16]
+
+    if not hmac.compare_digest(expected, hello_resp['mac']):
+        return None
+
+    return {'node_id': node_id_b, 'K_AB': K_AB,
+            'session_epoch': 0, 'miss_count': 0}
+
+def test_verify_hello_resp():
+    K_AB = bytes(range(16))
+    req    = send_hello_req(1, 2, K_AB)
+    resp   = send_hello_resp(2, 1, K_AB, req)
+    entry  = verify_hello_resp(1, K_AB, req['nonce_a'], resp)
+    assert entry is not None
+    assert entry['node_id'] == 2
+    print('Neighbor table entry:', entry)
+    entry2 = verify_hello_resp(1, K_AB, secrets.token_bytes(16), resp)
+    assert entry2 is None
+    print("M3 test pass")
+
+test_verify_hello_resp()
