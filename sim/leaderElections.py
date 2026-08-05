@@ -14,12 +14,8 @@ TIMEOUT = 5
 class Node:
     def __init__(self, node_id):
         self.id = node_id
-        # Random score stored independently (10.0 to 100.0)
         self.score = round(random.uniform(10, 100), 2)
         self.state = "IDLE"
-        
-        # Tuple format: (score, node_id)
-        # Python naturally compares score first, using node_id only for tiebreaking
         self.best_candidate = (self.score, self.id)
         self.last_packet = None
         self.resonance_count = 0
@@ -34,24 +30,26 @@ class ProtocolSimulation:
         self.resonance_thresh = resonance_thresh
         self.timeout = timeout
         
-        self.graph, self.pos = self._create_chordal_ring()
+        self.graph, self.pos = self._create_random_knn_graph()
         self.nodes = {i: Node(i) for i in range(n_nodes)}
         
         self.current_epoch = 0
         self.phase = "LEADER_ACTIVE"
-        self.msg_queue = []  # (sender, receiver, (score, candidate_id))
+        self.msg_queue = []
         
         self.leader_id = random.choice(list(self.nodes.keys()))
         self.nodes[self.leader_id].state = "LEADER"
 
-    def _create_chordal_ring(self):
+    def _create_random_knn_graph(self):
         G = nx.Graph()
-        pos = {i: (np.cos(2 * np.pi * i / self.n_nodes), 
-                   np.sin(2 * np.pi * i / self.n_nodes)) for i in range(self.n_nodes)}
+        
+        # 1. Generate random 2D coordinates for all nodes
+        pos = {i: (random.uniform(0, 100), random.uniform(0, 100)) for i in range(self.n_nodes)}
         
         for i in range(self.n_nodes):
             G.add_node(i)
             
+        # 2. Connect each node to its k-nearest Euclidean spatial neighbors
         for i in range(self.n_nodes):
             distances = []
             for j in range(self.n_nodes):
@@ -61,6 +59,7 @@ class ProtocolSimulation:
             distances.sort()
             for _, neighbor in distances[:self.k_neighbors]:
                 G.add_edge(i, neighbor)
+                
         return G, pos
 
     def step(self):
@@ -82,21 +81,18 @@ class ProtocolSimulation:
         elif self.phase == "ELECTION":
             next_queue = []
             
-            # Process in-flight packets
             for sender, receiver, packet in self.msg_queue:
                 recv_node = self.nodes[receiver]
                 
                 if recv_node.state == "VOTED":
                     continue
 
-                # Resonance Check
                 if packet == recv_node.last_packet:
                     recv_node.resonance_count += 1
                 else:
                     recv_node.last_packet = packet
                     recv_node.resonance_count = 1
 
-                # Higher score or ID tiebreaker forwarding
                 if packet > recv_node.best_candidate:
                     recv_node.best_candidate = packet
                     recv_node.resonance_count = 1
@@ -115,7 +111,6 @@ class ProtocolSimulation:
 
             self.msg_queue = next_queue
 
-            # 1. Update timeouts for LISTENING nodes & handle idle nodes when queue clears
             for node_id, node in self.nodes.items():
                 if node.state == "LISTENING":
                     node.timeout_counter += 1
@@ -123,11 +118,9 @@ class ProtocolSimulation:
                         node.state = "VOTED"
                         node.voted_leader = node.best_candidate[1]
                 elif node.state in ("IDLE", "ELECTING") and not self.msg_queue:
-                    # If message propagation finished, transition remaining active nodes to listening/voted
                     node.state = "VOTED"
                     node.voted_leader = node.best_candidate[1]
 
-            # 2. Strict convergence check across all nodes
             all_voted = all(node.state == "VOTED" for node in self.nodes.values())
 
             if all_voted:
@@ -136,7 +129,7 @@ class ProtocolSimulation:
                     self.leader_id = max(set(votes), key=votes.count)
                     self.nodes[self.leader_id].state = "LEADER"
                     self.phase = "CONVERGED"
-                    
+
 # --- Visualization Setup ---
 sim = ProtocolSimulation(
     n_nodes=NODE_NUMBER, 
@@ -165,9 +158,8 @@ def update(frame):
     node_colors = [get_node_color(sim.nodes[i].state) for i in sim.graph.nodes()]
     
     nx.draw_networkx_edges(sim.graph, sim.pos, ax=ax, alpha=0.3, edge_color="gray")
-    nx.draw_networkx_nodes(sim.graph, sim.pos, ax=ax, node_color=node_colors, node_size=700)
+    nx.draw_networkx_nodes(sim.graph, sim.pos, ax=ax, node_color=node_colors, node_size=650)
     
-    # Label displays: Node ID, Random Score, and Current Best Candidate ID
     labels = {
         i: f"N{i}\n({sim.nodes[i].best_candidate[0]:.1f}, N{sim.nodes[i].best_candidate[1]})" 
         for i in sim.graph.nodes()
