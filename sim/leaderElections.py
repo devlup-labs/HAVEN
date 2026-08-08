@@ -6,16 +6,16 @@ import matplotlib.animation as animation
 
 # --- Simulation Parameters ---
 NODE_NUMBER = 50
-NEAREST_NEIGHBORS = 5
+NEAREST_NEIGHBORS = 4
 LEADER_EPOCHS = 20
 RESONANCE_THRESHOLD = 3
-TIMEOUT = 10
+TIMEOUT = 5
 LEADER_PENALTY = 5.0
 
 class Node:
     def __init__(self, node_id, unique_score):
         self.id = node_id
-        self.score = unique_score
+        self.score = unique_score   
         self.reset_election_state()
 
     def reset_election_state(self):

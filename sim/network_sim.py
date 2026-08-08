@@ -5,7 +5,7 @@ import random
 import math
 
 # --- Simulation Parameters ---
-NUM_NODES = 1000
+NUM_NODES = 500
 BROADCAST_INTERVAL = 2      
 TIMEOUT_LIMIT = 5           
 FAIL_PROB = 0.005            

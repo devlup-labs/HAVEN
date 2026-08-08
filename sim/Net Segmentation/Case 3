@@ -1,0 +1,193 @@
+import networkx as nx
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import numpy as np
+import random
+
+# --- Simulation Parameters ---
+TOTAL_NODES = 50
+NEAREST_NEIGHBORS = 4
+SEARCH_TIMEOUT = 15
+
+class SegmentNode:
+    def __init__(self, node_id, is_leader=False):
+        self.id = node_id
+        self.is_leader = is_leader
+        self.state = "LEADER" if is_leader else "IDLE" 
+        # States: IDLE, LEADER, INITIATOR, SEARCHING, RESOLVED, DEAD
+        
+        self.seen_initiators = set()
+        self.search_timer = 0
+
+class NodeFailureSimulation:
+    def __init__(self, n_nodes, k_neighbors, timeout):
+        self.n_nodes = n_nodes
+        self.k_neighbors = k_neighbors
+        self.timeout = timeout
+        
+        # Build Topology: Random physical placement with KNN connections
+        self.graph = nx.Graph()
+        self.pos = {i: (random.uniform(0, 100), random.uniform(0, 100)) for i in range(self.n_nodes)}
+        
+        for i in range(self.n_nodes):
+            self.graph.add_node(i)
+            
+        for i in range(self.n_nodes):
+            distances = []
+            for j in range(self.n_nodes):
+                if i != j:
+                    dist = np.linalg.norm(np.array(self.pos[i]) - np.array(self.pos[j]))
+                    distances.append((dist, j))
+            distances.sort()
+            for _, neighbor in distances[:self.k_neighbors]:
+                self.graph.add_edge(i, neighbor)
+                
+        # Pick a random leader
+        self.leader_id = random.choice(list(self.graph.nodes()))
+        
+        # Pick a node to fail (ensure it's not the leader for this scenario)
+        self.dead_node = random.choice([n for n in self.graph.nodes() if n != self.leader_id])
+        
+        # Pick ONE neighbor to notice the failure and act as the initiator
+        self.initiator_node = random.choice(list(self.graph.neighbors(self.dead_node)))
+        
+        self.nodes = {i: SegmentNode(i, is_leader=(i == self.leader_id)) for i in range(n_nodes)}
+        
+        self.phase = "CONNECTED"
+        self.msg_queue = []
+        self.frame_count = 0
+
+    def step(self):
+        if self.phase == "CONNECTED":
+            self.frame_count += 1
+            if self.frame_count > 3: # Trigger failure after a brief pause
+                self.phase = "NODE_FAILED"
+                
+                # Turn off the node: remove its edges and update state
+                edges_to_remove = list(self.graph.edges(self.dead_node))
+                self.graph.remove_edges_from(edges_to_remove)
+                self.nodes[self.dead_node].state = "DEAD"
+                
+                # Initiator starts search
+                node = self.nodes[self.initiator_node]
+                node.state = "INITIATOR"
+                node.seen_initiators.add(self.initiator_node)
+                
+                # Broadcast search packet to remaining neighbors
+                for neighbor in self.graph.neighbors(self.initiator_node):
+                    self.msg_queue.append({
+                        "sender": self.initiator_node, "receiver": neighbor,
+                        "type": "SEARCH", "initiator": self.initiator_node
+                    })
+                
+                self.phase = "SEARCH_PROPAGATING"
+
+        elif self.phase == "SEARCH_PROPAGATING":
+            next_queue = []
+            
+            for msg in self.msg_queue:
+                recv_id = msg["receiver"]
+                recv_node = self.nodes[recv_id]
+                
+                if recv_node.state == "DEAD":
+                    continue
+                
+                if msg["type"] == "SEARCH":
+                    init_id = msg["initiator"]
+                    
+                    if init_id not in recv_node.seen_initiators:
+                        recv_node.seen_initiators.add(init_id)
+                        
+                        if recv_node.is_leader:
+                            # Leader found! Send ACK back towards initiator
+                            print(f"Leader N{recv_id} found! Sending ACK.")
+                            next_queue.append({
+                                "sender": recv_id, "receiver": msg["sender"],
+                                "type": "LEADER_ACK", "initiator": init_id
+                            })
+                        else:
+                            if recv_node.state == "IDLE":
+                                recv_node.state = "SEARCHING"
+                            # Forward search to neighbors
+                            for neighbor in self.graph.neighbors(recv_id):
+                                if neighbor != msg["sender"]:
+                                    next_queue.append({
+                                        "sender": recv_id, "receiver": neighbor,
+                                        "type": "SEARCH", "initiator": init_id
+                                    })
+                                    
+                elif msg["type"] == "LEADER_ACK":
+                    init_id = msg["initiator"]
+                    
+                    if recv_id == init_id:
+                        # Initiator received the leader's acknowledgment
+                        print(f"Initiator N{recv_id} received Leader ACK. Network intact!")
+                        recv_node.state = "RESOLVED"
+                        self.phase = "RESOLVED_INTACT"
+                        self.msg_queue = [] # Purge queue to end animation cleanly
+                        return
+                    else:
+                        # Forward ACK back towards initiator via nodes that saw the search
+                        for neighbor in self.graph.neighbors(recv_id):
+                            if init_id in self.nodes[neighbor].seen_initiators and neighbor != msg["sender"]:
+                                next_queue.append({
+                                    "sender": recv_id, "receiver": neighbor,
+                                    "type": "LEADER_ACK", "initiator": init_id
+                                })
+                                
+            self.msg_queue = next_queue
+
+# --- Visualization Setup ---
+sim = NodeFailureSimulation(n_nodes=TOTAL_NODES, k_neighbors=NEAREST_NEIGHBORS, timeout=SEARCH_TIMEOUT)
+fig, ax = plt.subplots(figsize=(10, 10))
+
+def get_node_color(state):
+    colors = {
+        "LEADER": "#2ecc71",       # Green
+        "IDLE": "#95a5a6",         # Grey
+        "INITIATOR": "#f1c40f",    # Yellow
+        "SEARCHING": "#3498db",    # Blue
+        "RESOLVED": "#9b59b6",     # Purple (Search success)
+        "DEAD": "#2c3e50"          # Dark Grey/Black (Turned off)
+    }
+    return colors.get(state, "#95a5a6")
+
+def update(frame):
+    ax.clear()
+    sim.step()
+    
+    node_colors = [get_node_color(sim.nodes[i].state) for i in sim.graph.nodes()]
+    
+    # Draw Graph
+    nx.draw_networkx_edges(sim.graph, sim.pos, ax=ax, alpha=0.3, edge_color="gray")
+    nx.draw_networkx_nodes(sim.graph, sim.pos, ax=ax, node_color=node_colors, node_size=250)
+    
+    labels = {i: f"{i}" for i in sim.graph.nodes()}
+    nx.draw_networkx_labels(sim.graph, sim.pos, labels=labels, font_size=8, ax=ax, font_color="white")
+    
+    # Draw Messages
+    for msg in sim.msg_queue:
+        sender, receiver = msg["sender"], msg["receiver"]
+        p1 = np.array(sim.pos[sender])
+        p2 = np.array(sim.pos[receiver])
+        midpoint = 0.5 * p1 + 0.5 * p2
+        
+        color = "cyan" if msg["type"] == "SEARCH" else "lime"
+        ax.plot(midpoint[0], midpoint[1], marker='o', markersize=6, color=color)
+
+    # UI Details
+    status_text = f"Phase: {sim.phase} | Frame: {frame}\n"
+    if sim.phase == "CONNECTED":
+        status_text += "Network intact. All nodes online."
+    elif sim.phase == "NODE_FAILED":
+        status_text += f"Node {sim.dead_node} FAILED! N{sim.initiator_node} initiating Leader Search."
+    elif sim.phase == "SEARCH_PROPAGATING":
+        status_text += "Cyan: Search Packets | Green: Leader ACK"
+    elif sim.phase == "RESOLVED_INTACT":
+        status_text += f"RESOLVED: Initiator N{sim.initiator_node} (Purple) verified link to Leader N{sim.leader_id}."
+
+    ax.set_title(status_text, fontsize=11, fontweight="bold")
+    ax.axis("off")
+
+ani = animation.FuncAnimation(fig, update, interval=400, repeat=False, cache_frame_data=False)
+plt.show()
