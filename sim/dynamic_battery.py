@@ -4,63 +4,30 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-# ============================================================
-# SIMULATION PARAMETERS
-# ============================================================
-
-NODE_NUMBER = 15
-NEAREST_NEIGHBORS = 5
+# --- Simulation Parameters ---
+NODE_NUMBER = 20
+NEAREST_NEIGHBORS = 4
 LEADER_EPOCHS = 20
 RESONANCE_THRESHOLD = 3
-TIMEOUT = 10
+TIMEOUT = 5
 
-# ---------------- Battery & Energy Parameters ----------------
-INITIAL_BATTERY = 100.0
-NORMAL_DRAIN = 0.015         # Energy consumed by normal node per epoch
-LEADER_EXTRA_DRAIN = 0.04    # Extra energy consumed by leader per epoch
-TX_COST = 0.002              # Transmission cost
-RX_COST = 0.001              # Reception cost
-
-
-# ============================================================
-# NODE CLASS
-# ============================================================
+# --- Battery & Score Parameters ---
+NORMAL_DRAIN = 0.05       # Idle/Follower drain per epoch
+LEADER_DRAIN = 0.15       # 3x drain for the active leader per epoch
+PACKET_DRAIN = 0.05       # Drain for forwarding election packets
+DEGREE_WEIGHT = 5.0       # Score bonus per active connection
 
 class Node:
-    def __init__(self, node_id, unique_score):
+    def __init__(self, node_id, initial_battery, degree):
         self.id = node_id
-        self.initial_score = unique_score
-        self.battery = INITIAL_BATTERY
-        self.score = self.calculate_score()
+        self.battery = initial_battery
+        self.degree = degree
         self.reset_election_state()
 
-    def calculate_score(self):
-        # Score dynamically scales down linearly with remaining battery percentage
-        return round(
-            self.initial_score * (self.battery / INITIAL_BATTERY),
-            1
-        )
-
-    def update_battery(self, amount):
-        self.battery = round(max(0.0, self.battery - amount), 2)
-        self.score = self.calculate_score()
-        self.best_candidate = (self.score, self.id)
-
-    def normal_energy_drain(self):
-        self.update_battery(NORMAL_DRAIN)
-
-    def leader_energy_drain(self):
-        self.update_battery(LEADER_EXTRA_DRAIN)
-
-    def transmit_energy(self):
-        self.update_battery(TX_COST)
-
-    def receive_energy(self):
-        self.update_battery(RX_COST)
-
     @property
-    def alive(self):
-        return self.battery > 0
+    def score(self):
+        """Dynamic score combining battery life and topological importance."""
+        return round(self.battery + (self.degree * DEGREE_WEIGHT), 1)
 
     def reset_election_state(self):
         self.state = "IDLE"  # IDLE, ELECTING, LISTENING, VOTED, LEADER
@@ -70,10 +37,13 @@ class Node:
         self.timeout_counter = 0
         self.voted_leader = None
 
-
-# ============================================================
-# PROTOCOL SIMULATION
-# ============================================================
+    def deduct_battery(self, penalty):
+        """Deducts battery and ensures it doesn't drop below 0.0"""
+        self.battery = round(max(0.0, self.battery - penalty), 2)
+        
+        # Only update the active candidate score if the node is still voting for itself
+        if self.best_candidate[1] == self.id:
+            self.best_candidate = (self.score, self.id)
 
 class ProtocolSimulation:
     def __init__(self, n_nodes, k_neighbors, leader_epochs, resonance_thresh, timeout):
@@ -85,10 +55,15 @@ class ProtocolSimulation:
         
         self.graph, self.pos = self._create_random_knn_graph()
         
-        unique_scores = [round(s, 1) for s in random.sample(
+        # Unique initial batteries (10.0 to 99.0 representing percentages)
+        unique_batteries = [round(s, 1) for s in random.sample(
             [x / 10.0 for x in range(100, 990)], self.n_nodes
         )]
-        self.nodes = {i: Node(i, unique_scores[i]) for i in range(n_nodes)}
+        
+        self.nodes = {}
+        for i in range(self.n_nodes):
+            degree = len(list(self.graph.neighbors(i)))
+            self.nodes[i] = Node(i, unique_batteries[i], degree)
         
         self.current_epoch = 0
         self.phase = "LEADER_ACTIVE"
@@ -118,57 +93,40 @@ class ProtocolSimulation:
 
     def step(self):
         if self.phase == "LEADER_ACTIVE":
+            # Continuous Battery Drain Simulation
+            for node_id, node in self.nodes.items():
+                if node_id == self.leader_id:
+                    node.deduct_battery(LEADER_DRAIN) # 3x drain for leader
+                else:
+                    node.deduct_battery(NORMAL_DRAIN) # Standard drain
+            
             self.current_epoch += 1
             
-            # Normal drain for all alive nodes
-            for node in self.nodes.values():
-                if node.alive:
-                    node.normal_energy_drain()
-            
-            # Extra penalty drain for active leader
-            leader = self.nodes[self.leader_id]
-            if leader.alive:
-                leader.leader_energy_drain()
-            
-            # Check if leader died from energy depletion
-            if not leader.alive or self.current_epoch >= self.leader_epochs:
+            if self.current_epoch >= self.leader_epochs:
                 self.phase = "ELECTION"
                 self.current_epoch = 0
                 
                 for node in self.nodes.values():
-                    if node.alive:
-                        node.reset_election_state()
-                    else:
-                        node.state = "VOTED"
+                    node.reset_election_state()
 
+                # Retiring leader triggers election via adjacent neighbors
                 old_leader_id = self.leader_id
                 neighbors = list(self.graph.neighbors(old_leader_id))
                 for neighbor in neighbors:
                     n_node = self.nodes[neighbor]
-                    if not n_node.alive:
-                        continue
-                        
                     n_node.state = "ELECTING"
                     packet = n_node.best_candidate
                     
+                    # Prevent sending election packets back to the retiring leader
                     for target in self.graph.neighbors(neighbor):
-                        if target != old_leader_id and self.nodes[target].alive:
-                            n_node.transmit_energy()
+                        if target != old_leader_id:
                             self.msg_queue.append((neighbor, target, packet))
 
         elif self.phase == "ELECTION":
             next_queue = []
             
             for sender, receiver, packet in self.msg_queue:
-                sender_node = self.nodes[sender]
                 recv_node = self.nodes[receiver]
-                
-                if not sender_node.alive or not recv_node.alive:
-                    continue
-
-                # Energy costs for comms
-                recv_node.receive_energy()
-                sender_node.transmit_energy()
                 
                 if recv_node.state == "VOTED":
                     continue
@@ -182,24 +140,28 @@ class ProtocolSimulation:
 
                 # 1. Incoming packet is strictly BETTER
                 if packet > recv_node.best_candidate:
+                    # Minor battery penalty for actively processing/forwarding an election packet
+                    recv_node.deduct_battery(PACKET_DRAIN)
+                    
                     recv_node.best_candidate = packet
                     recv_node.resonance_count = 1
                     recv_node.timeout_counter = 0
                     recv_node.state = "ELECTING"
                     
+                    # Forward new better packet to neighbors EXCEPT sender
                     for target in self.graph.neighbors(receiver):
-                        if target != sender and self.nodes[target].alive:
-                            recv_node.transmit_energy()
+                        if target != sender:
                             next_queue.append((receiver, target, packet))
 
                 # 2. Local candidate is strictly BETTER than incoming packet
                 elif recv_node.best_candidate > packet:
+                    recv_node.deduct_battery(PACKET_DRAIN)
                     better_packet = recv_node.best_candidate
                     recv_node.state = "ELECTING"
                     
+                    # Broadcast local superior candidate to neighbors EXCEPT sender
                     for target in self.graph.neighbors(receiver):
-                        if target != sender and self.nodes[target].alive:
-                            recv_node.transmit_energy()
+                        if target != sender:
                             next_queue.append((receiver, target, better_packet))
 
                 # 3. Duplicate candidate received -> check resonance threshold
@@ -209,11 +171,6 @@ class ProtocolSimulation:
             self.msg_queue = next_queue
 
             for node_id, node in self.nodes.items():
-                if not node.alive:
-                    node.state = "VOTED"
-                    node.voted_leader = None
-                    continue
-
                 if node.state == "LISTENING":
                     node.timeout_counter += 1
                     if node.timeout_counter >= self.timeout:
@@ -223,26 +180,17 @@ class ProtocolSimulation:
                     node.state = "VOTED"
                     node.voted_leader = node.best_candidate[1]
 
+            # Resolve Election
             if all(node.state == "VOTED" for node in self.nodes.values()):
-                votes = [
-                    node.voted_leader for node in self.nodes.values() 
-                    if node.voted_leader is not None and self.nodes[node.voted_leader].alive
-                ]
+                votes = [node.voted_leader for node in self.nodes.values() if node.voted_leader is not None]
                 if votes:
                     self.leader_id = max(set(votes), key=votes.count)
                     self.nodes[self.leader_id].state = "LEADER"
                     
-                    for node in self.nodes.values():
-                        if node.id != self.leader_id:
-                            node.state = "IDLE"
-                            
                     self.current_epoch = 0
                     self.phase = "LEADER_ACTIVE"
 
-# ============================================================
-# VISUALIZATION SETUP
-# ============================================================
-
+# --- Visualization Setup ---
 sim = ProtocolSimulation(
     n_nodes=NODE_NUMBER, 
     k_neighbors=NEAREST_NEIGHBORS, 
@@ -251,7 +199,7 @@ sim = ProtocolSimulation(
     timeout=TIMEOUT
 )
 
-fig, ax = plt.subplots(figsize=(9, 9))
+fig, ax = plt.subplots(figsize=(10, 10))
 
 def get_node_color(state):
     colors = {
@@ -272,24 +220,26 @@ def update(frame):
     nx.draw_networkx_edges(sim.graph, sim.pos, ax=ax, alpha=0.3, edge_color="gray")
     nx.draw_networkx_nodes(sim.graph, sim.pos, ax=ax, node_color=node_colors, node_size=650)
     
+    # Updated labels to display Battery, Connections (Deg), and Total Score
     labels = {
-        i: f"N{i}\nBat:{sim.nodes[i].battery:.0f}%\nS:{sim.nodes[i].score:.1f}" 
+        i: f"N{i} (Deg:{sim.nodes[i].degree})\nBat:{sim.nodes[i].battery:.1f}%\nScr:{sim.nodes[i].score:.1f}" 
         for i in sim.graph.nodes()
     }
-    nx.draw_networkx_labels(sim.graph, sim.pos, labels=labels, font_size=5, ax=ax)
+    nx.draw_networkx_labels(sim.graph, sim.pos, labels=labels, font_size=6, ax=ax)
     
     for sender, receiver, _ in sim.msg_queue:
         p1 = np.array(sim.pos[sender])
         p2 = np.array(sim.pos[receiver])
         midpoint = 0.6 * p1 + 0.4 * p2
-        ax.plot(midpoint[0], midpoint[1], 'ro', markersize=3)
+        ax.plot(midpoint[0], midpoint[1], 'ro', markersize=4)
 
     leader_node = sim.nodes[sim.leader_id]
     status_text = (
         f"Frame: {frame} | Phase: {sim.phase}\n"
-        f"Active Leader: N{sim.leader_id} (Battery: {leader_node.battery:.1f}%, Score: {leader_node.score:.1f}) | Term: {sim.current_epoch}/{LEADER_EPOCHS}"
+        f"Active Leader: N{sim.leader_id} (Battery: {leader_node.battery:.1f}% | Score: {leader_node.score:.1f})\n"
+        f"Term Progress: {sim.current_epoch}/{LEADER_EPOCHS} Epochs"
     )
-    ax.set_title(status_text, fontsize=10, fontweight="bold")
+    ax.set_title(status_text, fontsize=11, fontweight="bold")
     ax.axis("off")
 
 ani = animation.FuncAnimation(fig, update, interval=400, repeat=True, cache_frame_data=False)
