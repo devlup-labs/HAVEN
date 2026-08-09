@@ -218,4 +218,8 @@ def update(frame):
     ax.axis("off")
 
 ani = animation.FuncAnimation(fig, update, interval=600, repeat=False, cache_frame_data=False)
+
+manager = plt.get_current_fig_manager()
+manager.full_screen_toggle()
+
 plt.show()

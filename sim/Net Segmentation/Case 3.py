@@ -189,5 +189,9 @@ def update(frame):
     ax.set_title(status_text, fontsize=11, fontweight="bold")
     ax.axis("off")
 
-ani = animation.FuncAnimation(fig, update, interval=400, repeat=False, cache_frame_data=False)
+ani = animation.FuncAnimation(fig, update, interval=600, repeat=False, cache_frame_data=False)
+
+manager = plt.get_current_fig_manager()
+manager.full_screen_toggle()
+
 plt.show()

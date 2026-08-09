@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 # --- Simulation Parameters ---
-NODE_NUMBER = 20
+NODE_NUMBER = 25
 NEAREST_NEIGHBORS = 4
 LEADER_EPOCHS = 20
 RESONANCE_THRESHOLD = 3
