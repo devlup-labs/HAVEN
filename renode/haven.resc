@@ -1,0 +1,4 @@
+mach create "haven"
+machine LoadPlatformDescription @renode/haven.repl
+sysbus LoadELF @firmware/build/haven.elf
+start

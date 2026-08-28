@@ -1,0 +1,15 @@
+nvic: IRQControllers.NVIC @ sysbus 0xE000E000
+    systickFrequency: 16000000
+
+cpu: CPU.CortexM @ sysbus
+    cpuType: "cortex-m3"
+    nvic: nvic
+
+flash: Memory.MappedMemory @ sysbus 0x00000000
+    size: 0x00040000
+
+ram: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x00010000
+
+semihosting: CPU.SemihostingHandler @ cpu
+uart: UART.SemihostingUart @ semihosting
