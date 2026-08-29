@@ -15,7 +15,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CPU_FLAGS} -O0 -g -Wall")
 set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/linker.ld")
 
 
-set(SOURCES src/main.c 
+set(SOURCES src/main.c src/uart.c 
             src/startup.c 
             src/crypto.c
             src/turboblom.c
