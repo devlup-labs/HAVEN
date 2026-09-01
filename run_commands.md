@@ -1,3 +1,14 @@
+# Run full system
+
+### first time running
+../HAVEN -> ```chmod +x start_haven.sh``` 
+
+above command only needs to be executed once, then run:
+
+../HAVEN -> ```./start_haven.sh```
+
+---
+
 ### build
 ../firmware -> ```./build.sh```
 

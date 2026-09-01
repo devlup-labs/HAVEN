@@ -1,6 +1,7 @@
 import socket
 import sys
 import time
+import threading
 
 UART_DEVICE = "/tmp/haven_uart"
 TCP_HOST = "127.0.0.1"
@@ -31,7 +32,6 @@ def connect_tcp():
             )
             time.sleep(RETRY_SECONDS)
 
-
 def open_uart():
     while True:
         try:
@@ -52,6 +52,32 @@ def open_uart():
             )
             time.sleep(RETRY_SECONDS)
 
+def tcp_to_uart(tcp, uart):
+    while True:
+        data = tcp.recv(BUFFER_SIZE)
+
+        if not data:
+            print("[bridge] TCP connection closed", flush=True)
+            break
+
+        print(
+            f"[bridge] TCP -> UART: {data!r}",
+            flush=True
+        )
+
+        uart.write(data)
+
+def uart_to_tcp(uart, tcp):
+    while True:
+        data = uart.read(BUFFER_SIZE)
+
+        if data:
+            print(
+                f"[bridge] UART -> TCP: {data!r}",
+                flush=True
+            )
+            tcp.sendall(data)
+
 
 def main():
     uart = open_uart()
@@ -59,16 +85,23 @@ def main():
 
     print("[bridge] UART <-> TCP bridge running", flush=True)
 
-    try:
-        while True:
-            data = uart.read(BUFFER_SIZE)
+    #creating threads(so that we can do read and write simultaneously)
+    uart_to_tcp_thread = threading.Thread(
+        target=uart_to_tcp,
+        args=(uart, tcp)
+    )
 
-            if data:
-                print(
-                    f"[bridge] UART -> TCP: {data!r}",
-                    flush=True
-                )
-                tcp.sendall(data)
+    tcp_to_uart_thread = threading.Thread(
+        target=tcp_to_uart,
+        args=(tcp, uart)
+    )
+
+    uart_to_tcp_thread.start()
+    tcp_to_uart_thread.start()
+
+    try:
+        uart_to_tcp_thread.join()
+        tcp_to_uart_thread.join()
 
     except KeyboardInterrupt:
         print("\n[bridge] stopping", flush=True)

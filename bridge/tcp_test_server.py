@@ -1,4 +1,5 @@
 import socket
+import threading
 
 HOST = "127.0.0.1"
 PORT = 5000
@@ -22,14 +23,28 @@ conn, addr = server.accept()
 
 print(f"[server] connection from {addr}", flush=True)
 
-while True:
-    data = conn.recv(BUFFER_SIZE)
+def receive_data():
+    while True:
+        data = conn.recv(BUFFER_SIZE)
 
-    if not data:
-        print("[server] connection closed", flush=True)
-        break
+        if not data:
+            print("[server] connection closed", flush=True)
+            break
 
-    print(
-        f"[server] received: {data!r}",
-        flush=True
-    )
+        print(
+            f"[server] received: {data!r}",
+            flush=True
+        )
+
+def send_data():
+    while True:
+        message = input()
+
+        if message:
+            conn.sendall(message.encode())
+
+receive_thread = threading.Thread(target=receive_data)
+send_thread = threading.Thread(target=send_data)
+
+receive_thread.start()
+send_thread.start()
