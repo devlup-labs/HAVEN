@@ -68,15 +68,14 @@ def tcp_to_uart(tcp, uart):
         uart.write(data)
 
 def uart_to_tcp(uart, tcp):
-    while True:
-        data = uart.read(BUFFER_SIZE)
-
-        if data:
-            print(
-                f"[bridge] UART -> TCP: {data!r}",
-                flush=True
-            )
-            tcp.sendall(data)
+    try:
+        while True:
+            data = uart.read(BUFFER_SIZE)
+            if data:
+                print(f"[bridge] UART -> TCP: {data!r}", flush=True)
+                tcp.sendall(data)
+    except OSError:
+        print("[bridge] UART closed", flush=True)
 
 
 def main():
