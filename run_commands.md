@@ -9,10 +9,12 @@ above command only needs to be executed once, then run:
 
 ---
 
+# For individual testing
+
 ### build
 ../firmware -> ```./build.sh```
 
-### run
+### run renode
 ../HAVEN -> ```renode renode/haven.resc```
 
 ### To check for pty endpoint connection that has been created
@@ -24,7 +26,7 @@ above command only needs to be executed once, then run:
 (X derived from above command)
 
 ### To check the data that has reached the tcp bridge
-../Haven/bridge -> python3 uart_tcp_bridge.py
+../Haven/bridge -> ```python3 uart_tcp_bridge.py```
 
 ### To check the data that has reached the tcp server(to be replaced by ns3)
-../Haven/bridge -> python3 tcp_test_server.py
+../Haven/bridge -> ```python3 tcp_test_server.py```
