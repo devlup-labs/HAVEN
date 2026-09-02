@@ -42,7 +42,7 @@ def send_data():
 
         if message:
             print("[server] Sending message...", flush=True)
-            conn.sendall(message.encode())
+            conn.sendall((message + "\r\n").encode())
             print("[server] message sent", flush=True)
 
 receive_thread = threading.Thread(target=receive_data)

@@ -18,9 +18,17 @@ void uart_print_hex(const uint8_t *buf, size_t len)
 
 
 int main(void) {
-    //Test uart_init and uart_print
     uart_init();
-    uart_print("UART boot OK\r\n");
+
+    //UART transmit testing
+    const uint8_t message[] = "UART boot OK\r\n";
+    uart_transmit(message, sizeof(message) - 1);
+
+    // UART receive testing
+    char rx_buffer[64];
+    uart_receive((uint8_t *)rx_buffer, sizeof(rx_buffer));
+    uart_print("Received: ");
+    uart_print(rx_buffer);
 
 
     //HMAC testing
@@ -41,6 +49,7 @@ int main(void) {
         uart_print("Hex Key:   ");
         uart_print_hex(keyFinal, 16);
     }
+
 
     // Idle Loop
     while(1);
