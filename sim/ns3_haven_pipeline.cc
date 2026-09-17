@@ -223,7 +223,13 @@ int main(int argc, char *argv[]) {
     wifi.SetStandard(WIFI_STANDARD_80211b);
     
     YansWifiPhyHelper wifiPhy;
-    YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default();
+    
+    // Custom Channel to limit connection radius
+    YansWifiChannelHelper wifiChannel;
+    wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
+    // Limit transmission radius to 20 meters
+    wifiChannel.AddPropagationLoss("ns3::RangePropagationLossModel", 
+                                   "MaxRange", DoubleValue(20.0));
     wifiPhy.SetChannel(wifiChannel.Create());
     
     WifiMacHelper wifiMac;
