@@ -48,6 +48,10 @@ SECTIONS {
         . = ALIGN(4);
         _ebss = .;
     } > RAM
+
+    . = ALIGN(8);
+    end = .;
+    _end = .;
 }
 
 /*

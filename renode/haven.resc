@@ -1,0 +1,6 @@
+mach create "haven"
+machine LoadPlatformDescription @renode/haven.repl
+sysbus LoadELF @firmware/build/haven.elf
+emulation CreateUartPtyTerminal "uart" "/tmp/haven_uart" true
+uart AttachTo sysbus.uart
+start

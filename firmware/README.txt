@@ -1,4 +1,5 @@
-How to compile - 
+Automation - 
 
-The linker will search for function Reset_Handler.
-Run "build.sh" it will compile the files for you. Also for complete 'clean' rebuild, add -c flag while running build.sh
+build.sh accepts 2 valid flags during compilation -
+    "-c" for a clean rebuild of firmware
+    "-r" for running the firmware on qemu immediately after completing the build
