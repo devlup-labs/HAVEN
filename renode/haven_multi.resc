@@ -1,0 +1,20 @@
+
+mach create "haven_1"
+machine LoadPlatformDescription @renode/haven.repl
+sysbus LoadELF @firmware/build/haven.elf
+emulation CreateUartPtyTerminal "uart1" "/tmp/haven_uart_1" true
+connector Connect sysbus.uart uart1
+
+mach create "haven_2"
+machine LoadPlatformDescription @renode/haven.repl
+sysbus LoadELF @firmware/build/haven.elf
+emulation CreateUartPtyTerminal "uart2" "/tmp/haven_uart_2" true
+connector Connect sysbus.uart uart2
+
+mach create "haven_3"
+machine LoadPlatformDescription @renode/haven.repl
+sysbus LoadELF @firmware/build/haven.elf
+emulation CreateUartPtyTerminal "uart3" "/tmp/haven_uart_3" true
+connector Connect sysbus.uart uart3
+
+start

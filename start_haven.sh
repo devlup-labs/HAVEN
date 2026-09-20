@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e #command to make it stop if any command fails to run
+set -e
 
 cleanup() {
     echo
@@ -9,13 +9,15 @@ cleanup() {
     if [ -n "$RENODE_PID" ]; then
         kill "$RENODE_PID" 2>/dev/null || true
     fi
-
-    if [ -n "$SERVER_PID" ]; then
-    kill "$SERVER_PID" 2>/dev/null || true
+    
+    if [ -f "/tmp/haven_bridges.pids" ]; then
+        while read -r pid; do
+            kill "$pid" 2>/dev/null || true
+        done < "/tmp/haven_bridges.pids"
     fi
 
-    if [ -n "$BRIDGE_PID" ]; then
-        kill "$BRIDGE_PID" 2>/dev/null || true
+    if [ -n "$NS3_PID" ]; then
+        kill "$NS3_PID" 2>/dev/null || true
     fi
 
     echo "[launcher] HAVEN stopped."
@@ -23,65 +25,56 @@ cleanup() {
 
 trap cleanup INT TERM
 
-PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)" #directory where this file lives in
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+rm -f /tmp/haven_bridges.pids
 
-#remove all stale files
-rm -f /tmp/haven_server.pid /tmp/haven_bridge.pid
+NUM_NODES=${1:-3}
 
 echo "======================================"
-echo "        HAVEN Test Environment"
+echo "        HAVEN Multi-Node Test Env"
+echo "        Nodes: $NUM_NODES"
 echo "======================================"
 echo
 
-
-#Build the firmware
+# Build the firmware
 echo "[launcher] Building firmware..."
 "$PROJECT_ROOT/firmware/build.sh"
 echo
 
+# Generate Renode config
+echo "[launcher] Generating Renode script for $NUM_NODES nodes..."
+python3 "$PROJECT_ROOT/scripts/generate_renode_multi.py" $NUM_NODES
 
-# Start TCP server
-echo "[launcher] Starting TCP server..."
-SERVER_PID_FILE="/tmp/haven_server.pid"
+# Start NS-3
+echo "[launcher] Starting NS-3..."
+cd /home/akshat/ns-3.46
+./ns3 run "scratch/ns3_tcp_bridge --numNodes=$NUM_NODES" &
+NS3_PID=$!
+cd "$PROJECT_ROOT"
 
-gnome-terminal -- bash -c "echo \$\$ > '$SERVER_PID_FILE'; exec python3 '$PROJECT_ROOT/bridge/tcp_test_server.py'" &
-SERVER_TERMINAL_PID=$!
+# Wait for NS-3 to start its TCP servers
+sleep 2
 
-while [ ! -f "$SERVER_PID_FILE" ]; do
-    sleep 0.1
-done
-
-SERVER_PID=$(cat "$SERVER_PID_FILE")
-
-
-
-#Start renode
+# Start renode
 echo "[launcher] Starting Renode..."
-renode "$PROJECT_ROOT/renode/haven.resc" &
-
-sleep 1
-
-RENODE_PID=$(pgrep -n -f "dotnet /opt/renode/bin/Renode.dll $PROJECT_ROOT/renode/haven.resc")
-
+renode "$PROJECT_ROOT/renode/haven_multi.resc" &
+sleep 2
+RENODE_PID=$(pgrep -n -f "dotnet /opt/renode/bin/Renode.dll $PROJECT_ROOT/renode/haven_multi.resc" || echo $!)
 echo "[launcher] Renode PID: $RENODE_PID"
 
-
-# Start TCP bridge
-echo "[launcher] Starting TCP bridge..."
-
-BRIDGE_PID_FILE="/tmp/haven_bridge.pid"
-
-gnome-terminal -- bash -c "echo \$\$ > '$BRIDGE_PID_FILE'; exec python3 '$PROJECT_ROOT/bridge/uart_tcp_bridge.py'" &
-BRIDGE_TERMINAL_PID=$!
-
-while [ ! -f "$BRIDGE_PID_FILE" ]; do
-    sleep 0.1
+# Start TCP bridges
+echo "[launcher] Starting TCP bridges..."
+for i in $(seq 1 $NUM_NODES); do
+    PORT=$((4999 + i))
+    UART="/tmp/haven_uart_$i"
+    
+    gnome-terminal -- bash -c "python3 '$PROJECT_ROOT/bridge/uart_tcp_bridge.py' --uart '$UART' --port $PORT --node-id $i; sleep 5" &
+    BRIDGE_TERMINAL_PID=$!
+    # Note: tracking gnome-terminal pid isn't perfect, but we can't easily capture the inner python pid here.
+    # In a real setup, running in background without gnome-terminal is easier for tracking, but keeping it for visibility.
+    echo "$BRIDGE_TERMINAL_PID" >> /tmp/haven_bridges.pids
 done
 
-BRIDGE_PID=$(cat "$BRIDGE_PID_FILE")
-
-
-#stoping program
 echo
 echo "[launcher] HAVEN is running."
 echo "[launcher] Type 'quit haven' to shut down."
