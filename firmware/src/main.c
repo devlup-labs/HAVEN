@@ -36,10 +36,14 @@ int main(void)
     uart_print("HMAC Key:  ");
     uart_print_hex(out, 16);
 
-    // Protocol testing
+    // Protocol testing: Build and SEND a message over the network
     PresenceHeartbeat_t hb;
     protocol_build_presence_hb(&hb, 42, 1, 100);
-    uart_print("Presence HB built (Node: 42, Leader: 1)\r\n");
+    uart_print("Presence HB built (Node: 42, Leader: 1). Transmitting to network...\r\n");
+    
+    // Transmit the raw packet bytes over UART. 
+    // The Python bridge picks this up and injects it into the NS-3 WiFi simulation!
+    uart_transmit((uint8_t*)&hb, sizeof(PresenceHeartbeat_t));
 
     // Idle Loop
     while (1)
