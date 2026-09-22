@@ -57,9 +57,9 @@ sleep 2
 
 # Start renode
 echo "[launcher] Starting Renode..."
-renode "$PROJECT_ROOT/renode/haven_multi.resc" &
+"$PROJECT_ROOT/renode-portable/renode" "$PROJECT_ROOT/renode/haven_multi.resc" &
 sleep 2
-RENODE_PID=$(pgrep -n -f "dotnet /opt/renode/bin/Renode.dll $PROJECT_ROOT/renode/haven_multi.resc" || echo $!)
+RENODE_PID=$(pgrep -n -f "$PROJECT_ROOT/renode-portable/renode" || echo $!)
 echo "[launcher] Renode PID: $RENODE_PID"
 
 # Start TCP bridges

@@ -19,6 +19,8 @@ set(SOURCES src/main.c src/uart.c
             src/startup.c 
             src/crypto.c
             src/turboblom.c
+            src/neighbor_table.c
+            src/protocol.c
     )
 
 add_executable(haven.elf ${SOURCES})

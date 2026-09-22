@@ -8,7 +8,7 @@ mach create "haven_{i}"
 machine LoadPlatformDescription @renode/haven.repl
 sysbus LoadELF @firmware/build/haven.elf
 emulation CreateUartPtyTerminal "uart{i}" "/tmp/haven_uart_{i}" true
-connector Connect sysbus.uart uart{i}
+uart{i} AttachTo sysbus.uart
 """
 
     content += "\nstart\n"
@@ -21,4 +21,3 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         num_nodes = int(sys.argv[1])
     generate_resc(num_nodes)
-
