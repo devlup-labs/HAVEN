@@ -11,5 +11,6 @@ char uart_getchar(void);
 
 void uart_transmit(const uint8_t *data, size_t len);
 int uart_receive(uint8_t *buffer, size_t max_len);
+int uart_try_getchar(char *c);
 
 #endif

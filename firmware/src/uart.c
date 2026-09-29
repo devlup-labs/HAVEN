@@ -82,3 +82,9 @@ int uart_receive(uint8_t *buffer, size_t max_len)
     return (int)rx_len;
 }
 
+int uart_try_getchar(char *c)
+{
+    if ((USART_ISR & USART_ISR_RXNE_RXFNE) == 0) return 0;
+    *c = (char)USART_RDR;
+    return 1;
+}
