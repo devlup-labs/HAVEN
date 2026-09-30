@@ -11,7 +11,7 @@
 						1
 					],
 					"hasInstallRule" : true,
-					"jsonFile" : "directory-.-Debug-f5ebdc15457944623624.json",
+					"jsonFile" : "directory-.-f5ebdc15457944623624.json",
 					"minimumCMakeVersion" : 
 					{
 						"string" : "3.10"
@@ -33,7 +33,7 @@
 						6
 					],
 					"hasInstallRule" : true,
-					"jsonFile" : "directory-mbedtls-Debug-7c3420877bb09f071c02.json",
+					"jsonFile" : "directory-mbedtls-7c3420877bb09f071c02.json",
 					"minimumCMakeVersion" : 
 					{
 						"string" : "2.8.12"
@@ -49,7 +49,7 @@
 				{
 					"build" : "mbedtls/include",
 					"hasInstallRule" : true,
-					"jsonFile" : "directory-mbedtls.include-Debug-56e820a4e189af7351fa.json",
+					"jsonFile" : "directory-mbedtls.include-56e820a4e189af7351fa.json",
 					"minimumCMakeVersion" : 
 					{
 						"string" : "2.8.12"
@@ -65,7 +65,7 @@
 						4
 					],
 					"hasInstallRule" : true,
-					"jsonFile" : "directory-mbedtls.3rdparty-Debug-86659165e353930ac95b.json",
+					"jsonFile" : "directory-mbedtls.3rdparty-86659165e353930ac95b.json",
 					"minimumCMakeVersion" : 
 					{
 						"string" : "2.8.12"
@@ -77,7 +77,7 @@
 				{
 					"build" : "mbedtls/3rdparty/everest",
 					"hasInstallRule" : true,
-					"jsonFile" : "directory-mbedtls.3rdparty.everest-Debug-2d99454f9c78f6902e1b.json",
+					"jsonFile" : "directory-mbedtls.3rdparty.everest-2d99454f9c78f6902e1b.json",
 					"minimumCMakeVersion" : 
 					{
 						"string" : "2.8.12"
@@ -89,7 +89,7 @@
 				{
 					"build" : "mbedtls/library",
 					"hasInstallRule" : true,
-					"jsonFile" : "directory-mbedtls.library-Debug-a282abf7592087426527.json",
+					"jsonFile" : "directory-mbedtls.library-a282abf7592087426527.json",
 					"minimumCMakeVersion" : 
 					{
 						"string" : "2.8.12"
@@ -108,7 +108,7 @@
 				{
 					"build" : "mbedtls/pkgconfig",
 					"hasInstallRule" : true,
-					"jsonFile" : "directory-mbedtls.pkgconfig-Debug-0425960d7f9b65300db7.json",
+					"jsonFile" : "directory-mbedtls.pkgconfig-0425960d7f9b65300db7.json",
 					"minimumCMakeVersion" : 
 					{
 						"string" : "2.8.12"
@@ -118,7 +118,7 @@
 					"source" : "mbedtls/pkgconfig"
 				}
 			],
-			"name" : "Debug",
+			"name" : "",
 			"projects" : 
 			[
 				{
@@ -163,42 +163,42 @@
 				{
 					"directoryIndex" : 1,
 					"id" : "apidoc::@fbe91ab3117f4fa3cef5",
-					"jsonFile" : "target-apidoc-Debug-4d9fe144ae2d989d5b68.json",
+					"jsonFile" : "target-apidoc-4d9fe144ae2d989d5b68.json",
 					"name" : "apidoc",
 					"projectIndex" : 1
 				},
 				{
 					"directoryIndex" : 0,
 					"id" : "haven.elf::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-haven.elf-Debug-35b0b30798880e68d3b3.json",
+					"jsonFile" : "target-haven.elf-883fc6ec2d6f66beecf1.json",
 					"name" : "haven.elf",
 					"projectIndex" : 0
 				},
 				{
 					"directoryIndex" : 5,
 					"id" : "lib::@6ecf6eb6be8780e13bcb",
-					"jsonFile" : "target-lib-Debug-de08c34be2a2323aad1f.json",
+					"jsonFile" : "target-lib-de08c34be2a2323aad1f.json",
 					"name" : "lib",
 					"projectIndex" : 1
 				},
 				{
 					"directoryIndex" : 5,
 					"id" : "mbedcrypto::@6ecf6eb6be8780e13bcb",
-					"jsonFile" : "target-mbedcrypto-Debug-08533f022302d9cfafe8.json",
+					"jsonFile" : "target-mbedcrypto-149fdd27930859bf0ae9.json",
 					"name" : "mbedcrypto",
 					"projectIndex" : 1
 				},
 				{
 					"directoryIndex" : 5,
 					"id" : "mbedtls::@6ecf6eb6be8780e13bcb",
-					"jsonFile" : "target-mbedtls-Debug-d151b5f4cfd2393df855.json",
+					"jsonFile" : "target-mbedtls-7650adf2b3a0a5cb1cf3.json",
 					"name" : "mbedtls",
 					"projectIndex" : 1
 				},
 				{
 					"directoryIndex" : 5,
 					"id" : "mbedx509::@6ecf6eb6be8780e13bcb",
-					"jsonFile" : "target-mbedx509-Debug-4cb3488641ba73c58eb5.json",
+					"jsonFile" : "target-mbedx509-a4ebeea9da06d6277a8c.json",
 					"name" : "mbedx509",
 					"projectIndex" : 1
 				}

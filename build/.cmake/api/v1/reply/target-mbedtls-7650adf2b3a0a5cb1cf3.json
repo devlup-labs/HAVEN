@@ -3,7 +3,7 @@
 	"artifacts" : 
 	[
 		{
-			"path" : "mbedtls/library/libmbedx509.a"
+			"path" : "mbedtls/library/libmbedtls.a"
 		}
 	],
 	"backtrace" : 1,
@@ -28,7 +28,7 @@
 			{
 				"command" : 0,
 				"file" : 0,
-				"line" : 195,
+				"line" : 199,
 				"parent" : 0
 			},
 			{
@@ -40,7 +40,7 @@
 			{
 				"command" : 2,
 				"file" : 0,
-				"line" : 197,
+				"line" : 201,
 				"parent" : 0
 			},
 			{
@@ -57,7 +57,7 @@
 			"compileCommandFragments" : 
 			[
 				{
-					"fragment" : " -mcpu=cortex-m3 -mthumb -O0 -g -Wall -Wall -Wextra -Wwrite-strings -Wformat=2 -Wno-format-nonliteral -Wvla -Wlogical-op -Wshadow -Wformat-signedness -Wformat-overflow=2 -Wformat-truncation -Werror -Wmissing-declarations -Wmissing-prototypes -O0 -g3"
+					"fragment" : " -mcpu=cortex-m3 -mthumb -O0 -g -Wall -Wall -Wextra -Wwrite-strings -Wformat=2 -Wno-format-nonliteral -Wvla -Wlogical-op -Wshadow -Wformat-signedness -Wformat-overflow=2 -Wformat-truncation -Werror -Wmissing-declarations -Wmissing-prototypes"
 				}
 			],
 			"defines" : 
@@ -104,7 +104,9 @@
 				5,
 				6,
 				7,
-				8
+				8,
+				9,
+				10
 			]
 		}
 	],
@@ -113,9 +115,13 @@
 		{
 			"backtrace" : 3,
 			"id" : "mbedcrypto::@6ecf6eb6be8780e13bcb"
+		},
+		{
+			"backtrace" : 3,
+			"id" : "mbedx509::@6ecf6eb6be8780e13bcb"
 		}
 	],
-	"id" : "mbedx509::@6ecf6eb6be8780e13bcb",
+	"id" : "mbedtls::@6ecf6eb6be8780e13bcb",
 	"install" : 
 	{
 		"destinations" : 
@@ -130,8 +136,8 @@
 			"path" : "/usr/local"
 		}
 	},
-	"name" : "mbedx509",
-	"nameOnDisk" : "libmbedx509.a",
+	"name" : "mbedtls",
+	"nameOnDisk" : "libmbedtls.a",
 	"paths" : 
 	{
 		"build" : "mbedtls/library",
@@ -151,7 +157,9 @@
 				5,
 				6,
 				7,
-				8
+				8,
+				9,
+				10
 			]
 		}
 	],
@@ -160,55 +168,67 @@
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "mbedtls/library/certs.c",
+			"path" : "mbedtls/library/debug.c",
 			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "mbedtls/library/pkcs11.c",
+			"path" : "mbedtls/library/net_sockets.c",
 			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "mbedtls/library/x509.c",
+			"path" : "mbedtls/library/ssl_cache.c",
 			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "mbedtls/library/x509_create.c",
+			"path" : "mbedtls/library/ssl_ciphersuites.c",
 			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "mbedtls/library/x509_crl.c",
+			"path" : "mbedtls/library/ssl_cli.c",
 			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "mbedtls/library/x509_crt.c",
+			"path" : "mbedtls/library/ssl_cookie.c",
 			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "mbedtls/library/x509_csr.c",
+			"path" : "mbedtls/library/ssl_msg.c",
 			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "mbedtls/library/x509write_crt.c",
+			"path" : "mbedtls/library/ssl_srv.c",
 			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "mbedtls/library/x509write_csr.c",
+			"path" : "mbedtls/library/ssl_ticket.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "mbedtls/library/ssl_tls.c",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "mbedtls/library/ssl_tls13_keys.c",
 			"sourceGroupIndex" : 0
 		}
 	],

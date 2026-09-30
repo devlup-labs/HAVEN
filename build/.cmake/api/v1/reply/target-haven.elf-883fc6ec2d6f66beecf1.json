@@ -79,7 +79,7 @@
 			"compileCommandFragments" : 
 			[
 				{
-					"fragment" : " -mcpu=cortex-m3 -mthumb -O0 -g -Wall -g"
+					"fragment" : " -mcpu=cortex-m3 -mthumb -O0 -g -Wall"
 				}
 			],
 			"defines" : 
@@ -138,7 +138,7 @@
 		"commandFragments" : 
 		[
 			{
-				"fragment" : "-mcpu=cortex-m3 -mthumb -O0 -g -Wall -g",
+				"fragment" : "-mcpu=cortex-m3 -mthumb -O0 -g -Wall",
 				"role" : "flags"
 			},
 			{
