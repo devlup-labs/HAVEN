@@ -1,0 +1,219 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"childIndexes" : 
+					[
+						1
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.10"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						1
+					]
+				},
+				{
+					"build" : "mbedtls",
+					"childIndexes" : 
+					[
+						2,
+						3,
+						5,
+						6
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-mbedtls-Debug-7c3420877bb09f071c02.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "2.8.12"
+					},
+					"parentIndex" : 0,
+					"projectIndex" : 1,
+					"source" : "mbedtls",
+					"targetIndexes" : 
+					[
+						0
+					]
+				},
+				{
+					"build" : "mbedtls/include",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-mbedtls.include-Debug-56e820a4e189af7351fa.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "2.8.12"
+					},
+					"parentIndex" : 1,
+					"projectIndex" : 1,
+					"source" : "mbedtls/include"
+				},
+				{
+					"build" : "mbedtls/3rdparty",
+					"childIndexes" : 
+					[
+						4
+					],
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-mbedtls.3rdparty-Debug-86659165e353930ac95b.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "2.8.12"
+					},
+					"parentIndex" : 1,
+					"projectIndex" : 1,
+					"source" : "mbedtls/3rdparty"
+				},
+				{
+					"build" : "mbedtls/3rdparty/everest",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-mbedtls.3rdparty.everest-Debug-2d99454f9c78f6902e1b.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "2.8.12"
+					},
+					"parentIndex" : 3,
+					"projectIndex" : 1,
+					"source" : "mbedtls/3rdparty/everest"
+				},
+				{
+					"build" : "mbedtls/library",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-mbedtls.library-Debug-a282abf7592087426527.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "2.8.12"
+					},
+					"parentIndex" : 1,
+					"projectIndex" : 1,
+					"source" : "mbedtls/library",
+					"targetIndexes" : 
+					[
+						2,
+						3,
+						4,
+						5
+					]
+				},
+				{
+					"build" : "mbedtls/pkgconfig",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-mbedtls.pkgconfig-Debug-0425960d7f9b65300db7.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "2.8.12"
+					},
+					"parentIndex" : 1,
+					"projectIndex" : 1,
+					"source" : "mbedtls/pkgconfig"
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"childIndexes" : 
+					[
+						1
+					],
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "haven_firmware",
+					"targetIndexes" : 
+					[
+						1
+					]
+				},
+				{
+					"directoryIndexes" : 
+					[
+						1,
+						2,
+						3,
+						4,
+						5,
+						6
+					],
+					"name" : "Mbed TLS",
+					"parentIndex" : 0,
+					"targetIndexes" : 
+					[
+						0,
+						2,
+						3,
+						4,
+						5
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 1,
+					"id" : "apidoc::@fbe91ab3117f4fa3cef5",
+					"jsonFile" : "target-apidoc-Debug-4d9fe144ae2d989d5b68.json",
+					"name" : "apidoc",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "haven.elf::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-haven.elf-Debug-35b0b30798880e68d3b3.json",
+					"name" : "haven.elf",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 5,
+					"id" : "lib::@6ecf6eb6be8780e13bcb",
+					"jsonFile" : "target-lib-Debug-de08c34be2a2323aad1f.json",
+					"name" : "lib",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 5,
+					"id" : "mbedcrypto::@6ecf6eb6be8780e13bcb",
+					"jsonFile" : "target-mbedcrypto-Debug-08533f022302d9cfafe8.json",
+					"name" : "mbedcrypto",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 5,
+					"id" : "mbedtls::@6ecf6eb6be8780e13bcb",
+					"jsonFile" : "target-mbedtls-Debug-d151b5f4cfd2393df855.json",
+					"name" : "mbedtls",
+					"projectIndex" : 1
+				},
+				{
+					"directoryIndex" : 5,
+					"id" : "mbedx509::@6ecf6eb6be8780e13bcb",
+					"jsonFile" : "target-mbedx509-Debug-4cb3488641ba73c58eb5.json",
+					"name" : "mbedx509",
+					"projectIndex" : 1
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/mnt/Windows_SSD/Users/sheet/Desktop/AKSHAT/HAVEN_REPO/HAVEN/build",
+		"source" : "/mnt/Windows_SSD/Users/sheet/Desktop/AKSHAT/HAVEN_REPO/HAVEN/firmware"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 6
+	}
+}

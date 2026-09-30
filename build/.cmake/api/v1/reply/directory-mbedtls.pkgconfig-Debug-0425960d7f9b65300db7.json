@@ -1,0 +1,75 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"install"
+		],
+		"files" : 
+		[
+			"mbedtls/pkgconfig/CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 15,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 20,
+				"parent" : 0
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 25,
+				"parent" : 0
+			}
+		]
+	},
+	"installers" : 
+	[
+		{
+			"backtrace" : 1,
+			"component" : "Unspecified",
+			"destination" : "lib/pkgconfig",
+			"paths" : 
+			[
+				"/mnt/Windows_SSD/Users/sheet/Desktop/AKSHAT/HAVEN_REPO/HAVEN/build/mbedtls/pkgconfig/mbedcrypto.pc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 2,
+			"component" : "Unspecified",
+			"destination" : "lib/pkgconfig",
+			"paths" : 
+			[
+				"/mnt/Windows_SSD/Users/sheet/Desktop/AKSHAT/HAVEN_REPO/HAVEN/build/mbedtls/pkgconfig/mbedtls.pc"
+			],
+			"type" : "file"
+		},
+		{
+			"backtrace" : 3,
+			"component" : "Unspecified",
+			"destination" : "lib/pkgconfig",
+			"paths" : 
+			[
+				"/mnt/Windows_SSD/Users/sheet/Desktop/AKSHAT/HAVEN_REPO/HAVEN/build/mbedtls/pkgconfig/mbedx509.pc"
+			],
+			"type" : "file"
+		}
+	],
+	"paths" : 
+	{
+		"build" : "mbedtls/pkgconfig",
+		"source" : "mbedtls/pkgconfig"
+	}
+}
