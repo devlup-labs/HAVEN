@@ -188,7 +188,9 @@
             // Energy Model interval (fixed small rate every time step: 0.2% per second)
             setInterval(() => {
                 for (let id in nodeEnergy) {
-                    nodeEnergy[id].battery = Math.max(0, nodeEnergy[id].battery - 0.2);
+                    let drain = 0.2;
+                    if (leaders.has(parseInt(id))) drain += 2.0; // 2.0% per sec leader tax (since firmware drains 500 per 250ms = 2000 per sec)
+                    nodeEnergy[id].battery = Math.max(0, nodeEnergy[id].battery - drain);
                     updateNodeDOM(id);
                 }
             }, 1000);

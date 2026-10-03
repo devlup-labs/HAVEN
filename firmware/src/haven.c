@@ -340,7 +340,7 @@ void haven_run(void)
         }
         if (vote_on && expired(vote_dl)) vote_on = 0;
         if (mode == M_LEADER && expired(epoch_dl)) {    /* PHASE 9 */
-            tx_heartbeat(); epoch_dl = time_ms() + HAVEN_EPOCH_MS;
+            tx_heartbeat(); drain_battery(500); epoch_dl = time_ms() + HAVEN_EPOCH_MS;
             epoch_counter++;
             if (epoch_counter * HAVEN_EPOCH_MS >= 20000u) {
                 // Tenure over! Reboot the node to step down.
