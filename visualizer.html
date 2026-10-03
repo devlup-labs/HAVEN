@@ -65,7 +65,9 @@
 
   <script>
     let ringOrder = [];
+    let ringOrder = [];
     let serverNodesData = [];
+    let nodeEnergy = {}; // {id: {battery: float, score_base: int}}
     let nodesData = [];
     let leaders = new Set();
     
@@ -74,6 +76,21 @@
     let startTime = null;
     let timerInterval = null;
     
+    function updateNodeDOM(id) {
+        const el = document.getElementById('node-' + id);
+        if (!el) return;
+        const e = nodeEnergy[id];
+        if (!e) return;
+        const currentBat = e.battery.toFixed(1);
+        const currentScore = Math.floor(e.battery) + e.nb_n;
+        
+        // Only update the info div to avoid overwriting the ID text
+        const infoDiv = el.querySelector('.node-info');
+        if (infoDiv) {
+            infoDiv.innerHTML = `Bat: ${currentBat}%<br>Score: ${currentScore}`;
+        }
+    }
+
     function updateClock() {
       if (!startTime) return;
       const now = new Date();
@@ -167,9 +184,20 @@
         if (!startTime) {
             startTime = new Date();
             timerInterval = setInterval(updateClock, 100);
+            
+            // Energy Model interval (fixed small rate every time step: 0.2% per second)
+            setInterval(() => {
+                for (let id in nodeEnergy) {
+                    nodeEnergy[id].battery = Math.max(0, nodeEnergy[id].battery - 0.2);
+                    updateNodeDOM(id);
+                }
+            }, 1000);
         }
         ringOrder = data.order;
         serverNodesData = data.nodesData || [];
+        serverNodesData.forEach(n => {
+            nodeEnergy[n.id] = { battery: n.battery, nb_n: n.score - n.battery };
+        });
         document.getElementById('node-count').innerText = ringOrder.length;
         document.querySelector('#header p').innerText = "Live relay active.";
         initGraph();
