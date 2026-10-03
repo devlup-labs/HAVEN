@@ -228,10 +228,10 @@
         else if (data.ftype === 3) cls = ''; // claim defaults to blue
         else if (data.ftype === 4) {
           cls = 'heartbeat';
-          // if a node sends a heartbeat, it is the leader
-          if (!leaders.has(data.src)) {
-            leaders.add(data.src);
-            const nEl = document.getElementById(`node-${data.src}`);
+          // The true leader ID is extracted from the heartbeat payload
+          if (data.leader !== -1 && !leaders.has(data.leader)) {
+            leaders.add(data.leader);
+            const nEl = document.getElementById(`node-${data.leader}`);
             if (nEl) nEl.classList.add('leader');
           }
         }

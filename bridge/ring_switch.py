@@ -462,7 +462,7 @@ def main():
                     log(f"  {src} -> {dst if dst != BROADCAST else 'all'} "
                         f"{label}({ln}B) via {list(targets)}")
                 
-                sse_broadcast({"type": "packet", "src": src, "sender": nid, "dst": dst, "targets": list(targets), "ftype": ftype})
+                sse_broadcast({"type": "packet", "src": src, "sender": nid, "dst": dst, "targets": list(targets), "ftype": ftype, "leader": int(fr[HDR_LEN + 4]) if ftype == 4 and ln >= 5 else -1})
 
                 for t in targets:
                     nodes[t].queue(fr, now + hop_ms / 1000.0)
