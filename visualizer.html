@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <title>HAVEN Ring Visualizer</title>
   <style>
     body {
@@ -201,6 +202,11 @@
         document.querySelector('#header p').innerText = "Live relay active.";
         initGraph();
       } else if (data.type === 'packet') {
+        if (data.sender && nodeEnergy[data.sender]) {
+            nodeEnergy[data.sender].battery = Math.max(0, nodeEnergy[data.sender].battery - 0.05);
+            updateNodeDOM(data.sender);
+        }
+
         // T_DISCOVERY = 1, T_ELECTION = 2, T_CLAIM = 3, T_HEARTBEAT = 4
         let cls = '';
         if (data.ftype === 1) cls = 'discovery';
