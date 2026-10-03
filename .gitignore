@@ -1,5 +1,6 @@
 # ── Build outputs ──────────────────────────────────────────────────────────────
 firmware/build/
+firmware/build_node*/
 *.elf
 *.bin
 *.hex

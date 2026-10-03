@@ -21,6 +21,15 @@ typedef struct { uint8_t id; uint8_t key[HAVEN_KEY_LEN]; } nbr_t;
 static nbr_t   nb[HAVEN_MAX_ADJ_NODES];
 static uint8_t nb_n;
 
+/* PHASE 4 forwarding memory, one bit per origin per neighbour direction.
+   On a ring the same election packet arrives twice -- once travelling each way
+   -- and the two copies meet head-on at the antipodal node. The strictly-better
+   test in on_election alone drops the second copy as a duplicate, so BOTH copies
+   die mid-ring, no echo ever returns, ECHO_THRESHOLD is never met and no leader
+   is ever elected. Keying the memory on (origin, incoming neighbour) lets each
+   copy complete the ring, yielding exactly one echo per direction. */
+static uint8_t fwd_mask[HAVEN_MAX_ADJ_NODES][32];
+
 static hv_mode  mode = M_DISCOVERY;
 static uint16_t internal_score;
 static uint16_t best_score;
@@ -155,12 +164,32 @@ static void on_election(const frame_t *f)
         }
         return;
     }
-    if (score > best_score || (score == best_score && origin > best_origin)) {
+    /* Adopt a strictly better candidate (pseudocode:95-96). The echo counters
+       reset on improvement, but forwarding is separately gated below so that the
+       antipodal copy is not lost. */
+    int better = score > best_score || (score == best_score && origin > best_origin);
+    if (better) {
         best_score = score; best_origin = origin; memcpy(best_hs, p + 3, TAG);
         echo_count = 0; timeout_started = 0;
-        tx_election(score, origin, best_hs, replayer);
         if (mode == M_ELECTION) mode = M_PASSTHROUGH;
     }
+
+    /* Forward each (origin, incoming neighbour) at most once per ring, so both
+       directional copies traverse the whole ring instead of annihilating.
+       Slot i is selected by nb[i].id == replayer, so the key is the PAIR
+       (neighbour, origin): a node legitimately receives the same origin from
+       both of its neighbours, and an origin-only key would collide. */
+    for (uint8_t i = 0; i < nb_n; i++) {
+        if (nb[i].id != replayer) continue;
+        uint8_t *slot = fwd_mask[i];
+        if (slot[origin >> 3] & (uint8_t)(1u << (origin & 7))) return;
+        slot[origin >> 3] |= (uint8_t)(1u << (origin & 7));
+        break;
+    }
+    /* Forward the received packet's own score tag (identical to best_hs when
+       `better`); forwarding a not-strictly-better packet is required for the
+       ring to close, since a node holding a higher score must still relay it. */
+    tx_election(score, origin, p + 3, replayer);
 }
 
 /* ---------- PHASE 6/7: claim ---------- */
@@ -204,6 +233,10 @@ static void on_heartbeat(const frame_t *f)
     if (!tag_ok(g_cfg.k_master, 32, ml, 1, p + 5 + TAG)) return;
     if (ctr <= last_hb_counter) return;                /* "counter freshness" [CONFIRM] */
     last_hb_counter = ctr; leader_id = lid; mode = M_PASSTHROUGH;
+    /* Deliberate deviation: pseudocode:165-168 only sets leader_id and mode, but
+       a pending T_window would otherwise fire PHASE 8 and make this node LEADER
+       too. PASSTHROUGH means yield, so clear every timer that could promote us. */
+    claim_on = 0; window_on = 0; vote_on = 0;
 }
 static void tx_heartbeat(void)
 {
@@ -243,7 +276,7 @@ void haven_run(void)
     internal_score = g_cfg.battery_pct + nb_n;
     uint32_t odds = (((uint32_t)HAVEN_L_WEIGHT * g_cfg.battery_pct * 1000u) / 100u +
                      ((uint32_t)HAVEN_M_WEIGHT * nb_n * 1000u) / HAVEN_MAX_ADJ_NODES) / 2u;
-    if (odds < 1000u) odds = 1000u;                     /* as written: max(1, ...) -- see note */
+    if (odds < 1u) odds = 1u;                            /* max(1, ...) is a FLOOR (pseudocode:48) */
     uint32_t prob = (uint32_t)(((uint64_t)prng_next() * 1000u) / HAVEN_PRNG_M);
     mode = (odds > prob) ? M_ELECTION : M_PASSTHROUGH;
 
