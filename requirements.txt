@@ -1,0 +1,185 @@
+# ============================================================================
+# HAVEN -- dependency manifest
+# ============================================================================
+# Read the section headers. Python packages CANNOT express the system-level
+# toolchain (compilers, Renode, ns-3). Those are listed below as prose and are
+# NOT installable with `pip install -r requirements.txt`.
+#
+#   Quick start (Python side only):
+#       python3 -m venv .venv && source .venv/bin/activate
+#       pip install -r requirements.txt
+#
+#   Full working system (Python + firmware + emulation) requires the
+#   system-level packages in section 3. See plan.md for the full setup.
+# ============================================================================
+
+
+# ============================================================================
+# 1. PYTHON -- REQUIRED (core test + tooling suite)
+# ============================================================================
+# Verified: `python3 -m pytest sim/tests/ -q` runs 127 tests using ONLY pytest.
+# Everything else in this repo (bridge/, sim/) is pure standard library.
+
+# Test runner. Used by sim/tests/test_{turboblom,ring_election,provision,ring_switch}.py
+# Verified working: 6.2.5 (system) and 9.1.1 (venv).
+pytest>=6.2.5
+
+
+# ============================================================================
+# 2. PYTHON -- OPTIONAL (only for the legacy Blom network_sim.py)
+# ============================================================================
+# NOTE: sim/network_sim.py is an OLD model (Blom lambda+1 = 4) that predates the
+# current shared-K_master protocol. Its percentages are NOT valid for the
+# current implementation. It is kept for reference only and is broken
+# system-wide today (both imports fail). Install these only if you intend to
+# work on that file.
+
+# networkx>=3.0      # sim/network_sim.py only
+# numpy>=1.24        # sim/network_sim.py only
+#
+# Known-good versions from the pre-existing sim/.venv (if you prefer to pin):
+#   networkx==3.4.2
+#   numpy==2.2.6
+
+
+# ============================================================================
+# 3. SYSTEM PACKAGES -- REQUIRED (cannot be installed via pip)
+# ============================================================================
+# Debian/Ubuntu equivalents shown. These are needed for the firmware to
+# compile and for the N-instance Renode ring to run.
+#
+#   sudo apt install \
+#       gcc-arm-none-eabi \
+#       cmake \
+#       make \
+#       git \
+#       python3 \
+#       python3-pip \
+#       python3-venv
+#
+# Verified versions on the reference machine:
+#   arm-none-eabi-gcc   10.3.1 20210621 (release 15:1.3)  <- REQUIRED, firmware build fails without
+#   cmake               3.22.1                            <- REQUIRED (>= 3.10 per CMakeLists)
+#   GNU Make            4.3                               <- REQUIRED
+#   python3             3.10.12                           <- REQUIRED
+#   git                 any                               <- REQUIRED (repo + submodule-ish mbedtls)
+#
+# Optional:
+#   qemu-system-arm     present at /usr/bin/qemu-system-arm
+#                        Only used by `firmware/build.sh -r`. The N-node ring uses
+#                        Renode, not QEMU, so this is NOT required for start_haven.sh.
+
+
+# ============================================================================
+# 4. EMULATOR -- REQUIRED (Renode, NOT pip-installable)
+# ============================================================================
+# The multi-node ring launches N headless Renode instances. Each creates its own
+# PTY at /tmp/haven_uart_<id>.
+#
+# Verified working: Renode v1.16.1  (binary: /usr/bin/renode)
+#
+# Install (this is the reliable route):
+#   1. Download the portable .deb / .tar.gz from:
+#        https://github.com/renode/renode/releases
+#   2. Or use snap:
+#        sudo snap install renode
+#   3. Or build from source (slow):
+#        sudo apt install mono-complete mono-devel
+#        git clone https://github.com/renode/renode.git
+#        mkdir renode/build && cd renode/build
+#        ./configure --disable-dependency-tracking
+#        make -j$(nproc)
+#
+# Verify:
+#   renode --version          # must print a version
+#   which renode              # must resolve on PATH used by haven_ring.conf
+#
+# IMPORTANT runtime detail:
+#   start_haven.sh passes `--port -1` to every instance. Without it, each
+#   Renode process tries to bind monitor port 1234 and all but the first die
+#   with "Address already in use" -- and never create their PTY, so the ring
+#   silently forms partially. This is already handled in haven_ring.conf
+#   (RENODE_FLAGS). Do not remove --port -1.
+
+
+# ============================================================================
+# 5. ns-3 -- REQUIRED FOR THE NEXT PHASE (NOT pip-installable, NOT installed)
+# ============================================================================
+# STATUS: NOT YET INSTALLED ON THE REFERENCE MACHINE. Nothing in the current
+# working code path requires ns-3. The current ring (start_haven.sh +
+# bridge/ring_switch.py) runs entirely in Renode with no ns-3 involvement.
+#
+# ns-3 is the C++/Python discrete-event network simulator that will replace the
+# Python relay in bridge/ring_switch.py so it can model packet loss, delay and
+# bandwidth. See plan.md for the full design.
+#
+# ---- IMPORTANT CORRECTION -------------------------------------------------
+# The previous discussion assumed ns-3 had a native ZMQ co-simulation module.
+# IT DOES NOT. Verified against the upstream repo (nsnam/ns-3-dev-git):
+#   * `contrib/` contains only a .gitignore -- no zmq contrib module.
+#   * `src/` has NO zmq module. The closest are `fd-net-device` and
+#     `tap-bridge` (both need root/TAP) and `bridge` (L2 bridging).
+#   * `examples/` has no zmq example.
+# ns-3's supported external-simulator integration paths are therefore:
+#
+#   (A) TAP / veth bridge  -- `src/tap-bridge` (TapNetDevice).
+#       Requires CAP_NET_ADMIN to create /dev/net/tun interfaces.
+#       BLOCKED for the reference user: uid=1000, CapEff=0 (no capabilities).
+#       Would need root or a capabilities grant.
+#
+#   (B) Write a thin ns-3 module/application that links libzmq directly.
+#       ns-3 is a normal C++ library set; you can link any C/C++ dependency.
+#       Install libzmq3-dev, then write a small ns-3 application that opens a
+#       ZMQ socket per emulated node. This is the RECOMMENDED path for this
+#       project because it needs no privileges and keeps ns-3 in charge of
+#       time/loss modelling.
+#
+#   (C) NIST ns3-cosim (https://github.com/usnistgov/ns3-cosim)
+#       Uses a TCP/IP socket gateway, NOT ZMQ, and is pinned to a V2X fork of
+#       ns-3 (ns-3-dev-v2x-v1.1), not stock ns-3. Heavier than needed here.
+#
+# If you go with (B), the Python bridge already has pyzmq available (see below)
+# so only the ns-3 side needs libzmq C bindings.
+#
+# ---- Install instructions --------------------------------------------------
+# Stock ns-3 (recommended if following path (B)):
+#   git clone https://gitlab.com/nsnam/ns-3-dev.git
+#   cd ns-3-dev
+#   ./ns3 configure --enable-examples --enable-tests
+#   ./ns3 build
+#   ./ns3 run hello-simulator        # smoke test
+#
+# Dependencies for building ns-3:
+#   sudo apt install build-essential cmake ninja-build git python3 python3-pip \
+#                    g++ pkg-config libxml2-dev libsqlite3-dev qtbase5-dev
+#
+# Python-side helper libs used by the planned ZMQ bridge:
+#   pyzmq>=4.6          # ZMQ sockets from Python. Verified: 27.1.0 installed.
+#   pybind11>=2.10      # needed only if using ns-3 Python bindings. NOT installed.
+#
+# System-side ZMQ for the ns-3 (C++) side, path (B):
+#   sudo apt install libzmq3-dev
+#
+# Disk warning on the reference machine:
+#   / is 95% full (only ~4.7 GB free). Building ns-3 from source typically needs
+#   2-4 GB. Free space or build on another volume BEFORE running ./ns3 build.
+#   Check with: df -h /
+#
+# Do NOT rely on `apt install ns3` -- that is ns-3 3.35 (2019), which predates
+# all modern build tooling and has no ZMQ path.
+
+
+# ============================================================================
+# 6. VERIFIED WORKING STATE (reference machine, as of this writing)
+# ============================================================================
+# pytest suite           : 127 passed in 0.11s
+# firmware build         : 0 warnings/errors
+#                          text=21348 data=2120 bss=364 dec=23832 hex=5d18
+# firmware flash usage   : ~23468 bytes (text+data)
+# firmware RAM usage     : bss = 364 bytes (of 65536)
+# Renode N=3 ring        : leader elected (node 1); DISCOVERY=3 ELECTION=12
+#                          CLAIM=8 HEARTBEAT=38
+# Renode N=5 ring        : leader elected (node 1); DISCOVERY=5 ELECTION=50
+#                          CLAIM=6 HEARTBEAT=22
+#
+# See plan.md for how to reproduce these runs.
