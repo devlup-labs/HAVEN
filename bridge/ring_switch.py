@@ -47,6 +47,63 @@ HDR_LEN = 5
 MAX_PAYLOAD = 64          # HAVEN_MAX_PAYLOAD in firmware/include/haven_config.h
 BROADCAST = 0xFF          # HAVEN_ID_NONE
 
+import http.server
+import threading
+import json
+import queue
+
+sse_clients = []
+sse_lock = threading.Lock()
+
+class SSEHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            with open(str(Path(__file__).resolve().parents[1] / 'visualizer.html'), 'rb') as f:
+                self.wfile.write(f.read())
+        elif self.path == '/events':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/event-stream')
+            self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            q = queue.Queue()
+            with sse_lock:
+                sse_clients.append(q)
+                if last_init_msg:
+                    q.put(last_init_msg)
+            try:
+                while True:
+                    msg = q.get()
+                    self.wfile.write(f"data: {msg}\n\n".encode('utf-8'))
+                    self.wfile.flush()
+            except Exception:
+                with sse_lock:
+                    if q in sse_clients:
+                        sse_clients.remove(q)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+last_init_msg = None
+
+def sse_broadcast(msg_dict):
+    global last_init_msg
+    msg = json.dumps(msg_dict)
+    if msg_dict.get("type") == "init":
+        last_init_msg = msg
+    with sse_lock:
+        for q in sse_clients:
+            q.put(msg)
+
+def start_sse_server():
+    server = http.server.ThreadingHTTPServer(('0.0.0.0', 8080), SSEHandler)
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    return server
+
 FRAME_TYPES = {1: "DISCOVERY", 2: "ELECTION", 3: "CLAIM", 4: "HEARTBEAT"}
 
 # Colors, suppressed when not a TTY.
@@ -311,6 +368,13 @@ def main():
     neigh = {order[i]: (order[(i - 1) % n], order[(i + 1) % n])
              for i in range(n)}
 
+    start_sse_server()
+    nodes_data = []
+    for nid in order:
+        bat = 100 if nid == 1 else 100 - ((nid - 1) * 3) % 100
+        nodes_data.append({"id": nid, "battery": bat, "score": bat + 2})
+    sse_broadcast({"type": "init", "order": order, "nodesData": nodes_data})
+
     log("waiting for PTYs " + ", ".join(str(x.path) for x in nodes.values()))
     # Poll all paths together rather than opening one and waiting for the next.
     # Renode boots each instance at a slightly different wall time, and the
@@ -402,6 +466,8 @@ def main():
                     label = FRAME_TYPES.get(ftype, f"type{ftype}")
                     log(f"  {src} -> {dst if dst != BROADCAST else 'all'} "
                         f"{label}({ln}B) via {list(targets)}")
+                
+                sse_broadcast({"type": "packet", "src": src, "dst": dst, "targets": list(targets), "ftype": ftype})
 
                 for t in targets:
                     nodes[t].queue(fr, now + hop_ms / 1000.0)

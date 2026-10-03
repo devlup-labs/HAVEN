@@ -32,9 +32,9 @@
 #define HAVEN_TAG_LEN         16          /* truncated HMAC length */
 #define HAVEN_HASH_LEN        8           /* discovery hash length */
 #define HAVEN_ECHO_THRESHOLD  2
-#define HAVEN_T_CLAIM_MS      5000
-#define HAVEN_T_WINDOW_MS     5000
-#define HAVEN_EPOCH_MS        1000
+#define HAVEN_T_CLAIM_MS      500
+#define HAVEN_T_WINDOW_MS     500
+#define HAVEN_EPOCH_MS        250
 #define HAVEN_L_WEIGHT        1
 #define HAVEN_M_WEIGHT        1
 #define HAVEN_PRNG_A          1664525ULL

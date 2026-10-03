@@ -1418,6 +1418,18 @@
 			"value" : "/mnt/Windows_SSD/Users/sheet/Desktop/AKSHAT/HAVEN_REPO/HAVEN/firmware/mbedtls"
 		},
 		{
+			"name" : "NODE_ID",
+			"properties" : 
+			[
+				{
+					"name" : "HELPSTRING",
+					"value" : "Node id this firmware image is provisioned as (1..10)"
+				}
+			],
+			"type" : "STRING",
+			"value" : "1"
+		},
+		{
 			"name" : "UNSAFE_BUILD",
 			"properties" : 
 			[

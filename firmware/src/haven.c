@@ -268,9 +268,15 @@ void haven_run(void)
     prng_seed = g_cfg.id;                               /* [CONFIRM] initial_random_seed() */
 
     /* PHASE 1 */
-    tx_discovery();
-    uint32_t end = time_ms() + 5000u + (prng_next() % 1000u);   /* 5 < x < 6 s */
-    while (!expired(end)) if (link_poll(&f)) dispatch(&f);
+    uint32_t end = time_ms() + HAVEN_T_WINDOW_MS + (prng_next() % 100u);
+    uint32_t next_disc = time_ms();
+    while (!expired(end)) {
+        if (expired(next_disc)) {
+            tx_discovery();
+            next_disc = time_ms() + 100u;
+        }
+        if (link_poll(&f)) dispatch(&f);
+    }
 
     /* PHASE 2 */
     internal_score = g_cfg.battery_pct + nb_n;

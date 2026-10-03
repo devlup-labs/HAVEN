@@ -5,17 +5,17 @@ Compute a valid ring order for the HAVEN firmware from the shared-space graph.
 Two nodes can only become neighbours if their provisioned spaces intersect:
 compute_K_AB() returns None otherwise, and firmware on_discovery() drops the
 peer. At the default m=50, k=5 that happens for roughly 58% of node pairs, so
-a ring wired in numeric id order is usually impossible -- 5 of the 10
+a ring wired in numeric id order is usually impossible -- 5 of the 100
 id-adjacent pairs share no space.
 
 A ring order must therefore be a Hamiltonian cycle of the shared-space graph.
-This script finds one (exactly, by backtracking; N is at most 10 so the search
+This script finds one (exactly, by backtracking; N is at most 100 so the search
 is instant) and prints it ready to paste into haven_ring.conf.
 
 Usage:
-    ./sim/compute_ring_order.py                # default m=50 k=5, nodes 1..10
+    ./sim/compute_ring_order.py                # default m=50 k=5, nodes 1..100
     ./sim/compute_ring_order.py --nodes 3      # cycle over the first 3 nodes
-    ./sim/compute_ring_order.py --m 20 --k 10
+    ./sim/compute_ring_order.py --m 20 --k 100
 """
 import argparse
 import sys
@@ -70,13 +70,13 @@ def hamiltonian(adj, start):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--nodes", type=int, default=10, help="number of nodes (default 10)")
+    ap.add_argument("--nodes", type=int, default=100, help="number of nodes (default 100)")
     ap.add_argument("--k", type=int, default=5, help="spaces per node (default 5)")
     ap.add_argument("--m", type=int, default=50, help="total spaces (default 50)")
     args = ap.parse_args()
 
-    if not 3 <= args.nodes <= 10:
-        sys.exit("error: --nodes must be between 3 and 10")
+    if not 3 <= args.nodes <= 100:
+        sys.exit("error: --nodes must be between 3 and 100")
 
     k_master = bytes(range(32))
     ids = list(range(1, args.nodes + 1))

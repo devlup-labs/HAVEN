@@ -56,6 +56,9 @@
 			"defines" : 
 			[
 				{
+					"define" : "HAVEN_NODE_ID=1"
+				},
+				{
 					"define" : "MBEDTLS_CONFIG_FILE=\"/mnt/Windows_SSD/Users/sheet/Desktop/AKSHAT/HAVEN_REPO/HAVEN/firmware/include/mbedtls_config.h\""
 				}
 			],
