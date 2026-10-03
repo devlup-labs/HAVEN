@@ -51,6 +51,16 @@ def warn(msg):
     print(_c("31", "[bridge] ") + msg, file=sys.stderr, flush=True)
 
 
+def emit_event(ev_file, ev):
+    if not ev_file:
+        return
+    try:
+        with open(ev_file, "a") as f:
+            f.write(json.dumps(ev) + "\n")
+    except Exception:
+        pass
+
+
 # ------------------------------------------------------------------ framing
 
 def frames(buf):
@@ -184,6 +194,8 @@ def main():
     parser.add_argument("--run-seconds", type=int, default=90, help="duration to run")
     parser.add_argument("--stop-on-leader", type=int, default=0,
                         help="stop after N leader heartbeats are observed (0 to disable)")
+    parser.add_argument("--event-file", default=os.environ.get("HAVEN_EVENT_FILE", ""),
+                        help="path to append JSONL events for GUI visualizer")
     parser.add_argument("--verbose", action="store_true", help="verbose frame logging")
     parser.add_argument("--direct-relay", action="store_true",
                         help="direct ring/mesh relay without ns-3 (standalone mode)")
@@ -293,6 +305,17 @@ def main():
                 if dst is not None and dst in nodes and raw_fr:
                     nodes[dst].queue(raw_fr, now)
                     nodes[dst].pump(now)
+                    if args.event_file and len(raw_fr) >= HDR_LEN:
+                        r_ftype = raw_fr[1]
+                        emit_event(args.event_file, {
+                            "event": "rx",
+                            "time": now,
+                            "src": src,
+                            "dst": dst,
+                            "type": FRAME_TYPES.get(r_ftype, f"type{r_ftype}"),
+                            "type_id": r_ftype,
+                            "len": len(raw_fr) - HDR_LEN
+                        })
                     if args.verbose:
                         log(f"  [ZMQ -> PTY] delivering to node {dst} ({len(raw_fr)}B)")
 
@@ -312,11 +335,38 @@ def main():
                     ftype, ln, src, dst = fr[1], fr[2], fr[3], fr[4]
                     stats[ftype] = stats.get(ftype, 0) + 1
 
+                    if args.event_file:
+                        ev = {
+                            "event": "tx",
+                            "time": now,
+                            "src": src,
+                            "dst": dst,
+                            "type": FRAME_TYPES.get(ftype, f"type{ftype}"),
+                            "type_id": ftype,
+                            "len": ln,
+                            "hex": fr.hex()
+                        }
+                        if ftype == 2 and ln >= 2:
+                            ev["score"] = fr[HDR_LEN]
+                            ev["origin"] = fr[HDR_LEN + 1]
+                        elif ftype == 3 and ln >= 2:
+                            ev["origin"] = fr[HDR_LEN]
+                            ev["score"] = fr[HDR_LEN + 1]
+                        elif ftype == 4 and ln >= 5:
+                            ev["leader_id"] = fr[HDR_LEN + 4]
+                        emit_event(args.event_file, ev)
+
                     if ftype == 4 and ln >= 5:  # HEARTBEAT
                         lid = fr[HDR_LEN + 4]
                         if lid not in seen_leader:
                             seen_leader.add(lid)
                             log(f"node {lid} is sending heartbeats")
+                            if args.event_file:
+                                emit_event(args.event_file, {
+                                    "event": "leader",
+                                    "time": now,
+                                    "leader_id": lid
+                                })
                         if args.stop_on_leader and stats[4] >= args.stop_on_leader:
                             log(f"observed {stats[4]} heartbeats from leader {lid}; stopping early")
                             stop = True
@@ -348,6 +398,15 @@ def main():
     log("frames captured: " + ", ".join(
         f"{FRAME_TYPES.get(t, f'type{t}')}={c}" for t, c in sorted(stats.items())))
     log(f"total {total} frames")
+
+    if args.event_file:
+        emit_event(args.event_file, {
+            "event": "finished",
+            "time": time.time(),
+            "elapsed": elapsed,
+            "stats": {FRAME_TYPES.get(t, f"type{t}"): c for t, c in stats.items()},
+            "leaders": sorted(seen_leader)
+        })
 
     for nd in nodes.values():
         nd.close()

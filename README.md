@@ -140,12 +140,25 @@ To exit QEMU: `Ctrl+A` then `X`.
 
 ---
 
-## Running the Simulation
+## Running the Simulation & GUI Visualizer
 
+### Launch Interactive Web GUI Visualizer
 ```bash
-source sim/.venv/bin/activate
+./start_gui.sh
+# Open http://localhost:8080 in your browser
+```
+Features:
+- **Interactive Network Graph**: Live visualization of nodes, point-to-point links, TurboBlom key spaces, and animated packet flights.
+- **Dual Execution Engines**: Fast interactive discrete-event protocol simulation (with stepping & live chaos) and full Renode Cortex-M3 + ns-3 hardware co-simulation.
+- **Telemetry & Inspection**: Real-time leader convergence metrics, node inspector with battery gauge and authenticated neighbor links, packet chronicle, and terminal logs.
+- **Fault Injection**: Dynamically break links, crash/revive nodes, and modify battery levels at runtime.
+
+### CLI Simulation & Tests
+```bash
+source .venv/bin/activate
 python3 sim/turboblom.py        # TurboBlom reference + self-test
 python3 sim/network_sim.py      # NetworkX topology simulation
+export PYTHONPATH=.
 pytest sim/tests/               # Full test suite
 ```
 

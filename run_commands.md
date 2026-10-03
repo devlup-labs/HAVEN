@@ -1,4 +1,20 @@
-# Run full system
+# Run GUI Visualizer Studio
+
+### Start Web GUI (Simulation Controller & Live Network Graph)
+../HAVEN -> ```./start_gui.sh```
+(Or with custom port: `./start_gui.sh --port 8080`)
+
+Then open **http://localhost:8080** in your browser.
+- Interactive network canvas with live flying packet animations
+- Start / Pause / Step / Reset controls
+- Fast discrete-event simulation or full Renode + ns-3 hardware co-simulation
+- Real-time fault injection (link drop, node crash, battery drain)
+- Live node inspector with TurboBlom key spaces and authenticated neighbors
+- Packet chronicle & serial log console
+
+---
+
+# Run full system (CLI)
 
 ### first time running
 ../HAVEN -> ```chmod +x start_haven.sh``` 

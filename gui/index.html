@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HAVEN Co-Simulation Studio | Distributed Consensus Visualizer</title>
+  <meta name="description" content="Hardened Authenticated Voter Election Network (HAVEN) Co-Simulation Visualizer and Control Studio. Real-time discrete-event and Renode hardware emulation.">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+  <!-- =========================================================================
+       Top Header Navigation
+       ========================================================================= -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="logo-badge">
+        <svg class="logo-icon" viewBox="0 0 24 24">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 2.18l7 3.12v4.7c0 4.67-3.13 9.04-7 10.18-3.87-1.14-7-5.51-7-10.18V6.3l7-3.12zm-1 5v6h2v-6h-2zm0 8v2h2v-2h-2z"/>
+        </svg>
+      </div>
+      <div class="brand-title">
+        <h1>HAVEN STUDIO</h1>
+        <span>Hardened Authenticated Voter Election Network</span>
+      </div>
+    </div>
+
+    <!-- Center Metrics Overview -->
+    <div class="header-metrics">
+      <div class="metric-item">
+        <span class="metric-label">Leader:</span>
+        <span id="metricLeader" class="metric-value highlight-cyan">None</span>
+      </div>
+      <div class="metric-item">
+        <span class="metric-label">Hops:</span>
+        <span id="metricHop" class="metric-value">0</span>
+      </div>
+      <div class="metric-item">
+        <span class="metric-label">Sim Time:</span>
+        <span id="metricTime" class="metric-value">0 ms</span>
+      </div>
+      <div class="metric-item">
+        <span class="metric-label">Frames:</span>
+        <span id="metricFrames" class="metric-value highlight-amber">0</span>
+      </div>
+    </div>
+
+    <!-- Header Actions & Status -->
+    <div class="header-actions">
+      <div class="mode-selector">
+        <button id="btnModeFast" class="mode-btn active" title="High-fidelity discrete-event in-process simulation">
+          ⚡ Interactive Sim
+        </button>
+        <button id="btnModeCosim" class="mode-btn" title="Renode Cortex-M3 + ns-3 hardware co-simulation">
+          🖥️ Renode Co-Sim
+        </button>
+      </div>
+
+      <div id="statusPill" class="status-pill idle">
+        <span class="status-dot"></span>
+        <span id="statusText">IDLE</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       Control Toolbar
+       ========================================================================= -->
+  <div class="app-toolbar">
+    <div class="control-group">
+      <button id="btnStart" class="btn btn-primary" title="Start / Resume simulation">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <span>Run</span>
+      </button>
+
+      <button id="btnPause" class="btn btn-secondary" style="display: none;" title="Pause simulation">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        <span>Pause</span>
+      </button>
+
+      <button id="btnStep" class="btn btn-secondary" title="Advance simulation by 1 hop">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+        <span>Step Hop</span>
+      </button>
+
+      <button id="btnStop" class="btn btn-danger" title="Stop simulation">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>
+        <span>Stop</span>
+      </button>
+
+      <button id="btnReset" class="btn btn-secondary" title="Reset state">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+        <span>Reset</span>
+      </button>
+    </div>
+
+    <!-- Speed Slider -->
+    <div class="control-group">
+      <div class="speed-control">
+        <span>Speed:</span>
+        <input type="range" id="speedSlider" min="0.2" max="5.0" step="0.2" value="1.0">
+        <span id="speedVal" class="speed-value">1.0x</span>
+      </div>
+    </div>
+
+    <!-- Presets & Generator -->
+    <div class="control-group">
+      <div class="preset-dropdown-container">
+        <select id="presetSelect" class="select-input">
+          <option value="mesh_10">Erdos-Renyi Mesh (10 Nodes)</option>
+          <option value="ring_3">Minimal Ring (3 Nodes)</option>
+          <option value="ring_5">Chordal Ring (5 Nodes)</option>
+          <option value="ring_8">8-Node Ring</option>
+          <option value="dense_12">Dense Sensor Mesh (12 Nodes)</option>
+        </select>
+      </div>
+
+      <button id="btnOpenGenerator" class="btn btn-secondary" title="Configure and generate custom topology">
+        <span>⚙️ Custom Topology</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       Main Dashboard 3-Column Grid
+       ========================================================================= -->
+  <main class="app-main">
+
+    <!-- Left Column: States, Stats, Chaos -->
+    <aside class="left-sidebar">
+
+      <!-- Protocol State Machine Card -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <span class="panel-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--color-cyan)"><circle cx="12" cy="12" r="10"/></svg>
+            Protocol State Machine
+          </span>
+          <span class="panel-badge">HAVEN L3</span>
+        </div>
+
+        <div class="legend-grid">
+          <div class="legend-item discovery">
+            <span class="legend-name">
+              <span class="legend-chip" style="background: var(--state-discovery);"></span>
+              Discovery (Phase 1)
+            </span>
+            <span id="countDiscovery" class="legend-count">0</span>
+          </div>
+
+          <div class="legend-item election">
+            <span class="legend-name">
+              <span class="legend-chip" style="background: var(--state-election);"></span>
+              Election Candidate
+            </span>
+            <span id="countElection" class="legend-count">0</span>
+          </div>
+
+          <div class="legend-item passthrough">
+            <span class="legend-name">
+              <span class="legend-chip" style="background: var(--state-passthrough);"></span>
+              Passthrough Voter
+            </span>
+            <span id="countPassthrough" class="legend-count">0</span>
+          </div>
+
+          <div class="legend-item claiming">
+            <span class="legend-name">
+              <span class="legend-chip" style="background: var(--state-claiming);"></span>
+              Claiming (Echo Met)
+            </span>
+            <span id="countClaiming" class="legend-count">0</span>
+          </div>
+
+          <div class="legend-item leader">
+            <span class="legend-name">
+              <span class="legend-chip" style="background: var(--state-leader);"></span>
+              Elected Leader 👑
+            </span>
+            <span id="countLeader" class="legend-count">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Frame Breakdown -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <span class="panel-title">Frame Counters</span>
+          <span class="panel-badge">Live</span>
+        </div>
+
+        <div class="stats-cards">
+          <div class="stat-box">
+            <span class="stat-box-title">Discovery</span>
+            <span id="statBoxDiscovery" class="stat-box-num" style="color: var(--color-cyan);">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-box-title">Election</span>
+            <span id="statBoxElection" class="stat-box-num" style="color: var(--color-amber);">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-box-title">Claim</span>
+            <span id="statBoxClaim" class="stat-box-num" style="color: var(--color-violet);">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-box-title">Heartbeat</span>
+            <span id="statBoxHeartbeat" class="stat-box-num" style="color: var(--color-emerald);">0</span>
+          </div>
+          <div class="stat-box" style="grid-column: span 2;">
+            <span class="stat-box-title">Dropped (Loss / Failure)</span>
+            <span id="statBoxDropped" class="stat-box-num" style="color: var(--color-rose);">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fault Injection / Chaos Panel -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <span class="panel-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--color-rose)"><path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 10v4h2v-4h-2zm0 6v2h2v-2h-2z"/></svg>
+            Fault & Chaos Injection
+          </span>
+          <span class="panel-badge">Resilience</span>
+        </div>
+
+        <div class="chaos-tools">
+          <div class="tool-row">
+            <span class="tool-label">Toggle Link Break:</span>
+            <div class="tool-inputs">
+              <input type="number" id="linkNodeA" class="num-input" placeholder="Node A" value="1" min="1">
+              <input type="number" id="linkNodeB" class="num-input" placeholder="Node B" value="2" min="1">
+              <button id="btnToggleLink" class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.76rem;">Toggle</button>
+            </div>
+          </div>
+
+          <div class="tool-row">
+            <span class="tool-label">Kill / Revive Node:</span>
+            <div class="tool-inputs">
+              <input type="number" id="crashNodeId" class="num-input" placeholder="Node ID" value="1" min="1">
+              <button id="btnToggleNode" class="btn btn-danger" style="padding: 6px 10px; font-size: 0.76rem;">Kill / Revive</button>
+            </div>
+          </div>
+
+          <div class="tool-row">
+            <span class="tool-label">Override Node Battery (%):</span>
+            <div class="tool-inputs">
+              <input type="number" id="battNodeId" class="num-input" placeholder="Node ID" value="1" min="1">
+              <input type="number" id="battLevel" class="num-input" placeholder="%" value="15" min="0" max="100">
+              <button id="btnSetBattery" class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.76rem;">Set</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- Center Column: Network Canvas Visualizer -->
+    <section class="center-viewport">
+      <div class="canvas-container">
+
+        <!-- Convergence Alert Badge -->
+        <div id="convergenceBanner" class="convergence-banner">
+          <div class="convergence-icon">👑</div>
+          <div class="convergence-text">
+            <strong id="bannerLeaderId">Node 1 Elected Leader!</strong>
+            <span>Consensus established in <span id="bannerHop">18 hops</span></span>
+          </div>
+        </div>
+
+        <!-- Floating Canvas Info -->
+        <div class="canvas-overlay-top">
+          <div class="canvas-badge">
+            <span>Drag nodes to reposition • Scroll to Zoom</span>
+          </div>
+        </div>
+
+        <!-- Floating Canvas Buttons -->
+        <div class="canvas-overlay-controls">
+          <button id="btnZoomIn" class="canvas-btn" title="Zoom In">+</button>
+          <button id="btnZoomOut" class="canvas-btn" title="Zoom Out">-</button>
+          <button id="btnFit" class="canvas-btn" title="Fit to Screen">⛶</button>
+        </div>
+
+        <!-- The Canvas -->
+        <canvas id="networkCanvas"></canvas>
+      </div>
+    </section>
+
+    <!-- Right Column: Node Inspector & Live Packets -->
+    <aside class="right-sidebar">
+
+      <!-- Node Inspector Card -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <span class="panel-title">Node Inspector</span>
+          <span class="panel-badge">Telemetry</span>
+        </div>
+
+        <div id="inspectorEmpty" style="color: var(--text-dim); font-size: 0.8rem; text-align: center; padding: 20px 0;">
+          Click any node on the graph to inspect its cryptographic state & scores.
+        </div>
+
+        <div id="inspectorContent" class="node-details" style="display: none;">
+          <div class="node-header-row">
+            <span id="inspNodeId" class="node-title-badge">Node #1</span>
+            <span id="inspModeBadge" class="node-mode-badge discovery">DISCOVERY</span>
+          </div>
+
+          <!-- Battery Gauge -->
+          <div class="battery-container">
+            <div class="battery-header">
+              <span>Battery Level</span>
+              <span id="inspBatteryPct" style="font-family: var(--font-mono); font-weight: 600;">100%</span>
+            </div>
+            <div class="battery-bar-bg">
+              <div id="inspBatteryFill" class="battery-bar-fill" style="width: 100%;"></div>
+            </div>
+          </div>
+
+          <!-- TurboBlom Key Spaces -->
+          <div class="spaces-section">
+            <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase;">TurboBlom Key Spaces (k=5):</span>
+            <div id="inspSpacesList" class="spaces-chips">
+              <span class="space-chip">S0</span>
+              <span class="space-chip">S4</span>
+              <span class="space-chip">S8</span>
+            </div>
+          </div>
+
+          <!-- Internal Score & Origin -->
+          <div class="info-grid">
+            <div class="info-item">
+              <span>Internal Score</span>
+              <span id="inspScore">102</span>
+            </div>
+            <div class="info-item">
+              <span>Echo Count</span>
+              <span id="inspEchoes">2 / 2</span>
+            </div>
+            <div class="info-item">
+              <span>Best Origin</span>
+              <span id="inspBestOrigin">Node 1</span>
+            </div>
+            <div class="info-item">
+              <span>Best Score</span>
+              <span id="inspBestScore">102</span>
+            </div>
+          </div>
+
+          <!-- Authenticated Neighbours -->
+          <div class="tool-row">
+            <span style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase;">Authenticated Neighbours:</span>
+            <div id="inspNeighbours" style="font-family: var(--font-mono); font-size: 0.82rem; color: #cbd5e1;">
+              Node 2, Node 4, Node 8
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Packet Chronicle -->
+      <div class="panel-card" style="flex: 1;">
+        <div class="panel-header">
+          <span class="panel-title">Packet Chronicle</span>
+          <span class="panel-badge">Wire Stream</span>
+        </div>
+
+        <div class="packets-container">
+          <div class="filter-bar">
+            <button class="filter-pill active" data-filter="ALL">All</button>
+            <button class="filter-pill" data-filter="DISCOVERY">Discovery</button>
+            <button class="filter-pill" data-filter="ELECTION">Election</button>
+            <button class="filter-pill" data-filter="CLAIM">Claim</button>
+            <button class="filter-pill" data-filter="HEARTBEAT">Heartbeat</button>
+          </div>
+
+          <div id="packetList" class="packet-list">
+            <!-- Dynamic packet cards injected here -->
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+  </main>
+
+  <!-- =========================================================================
+       Bottom Drawer: Tabbed Console
+       ========================================================================= -->
+  <footer class="app-console-drawer">
+    <div class="console-tabs">
+      <button class="tab-btn active" data-tab="events">
+        <span>📋 Protocol Events</span>
+      </button>
+      <button class="tab-btn" data-tab="renode">
+        <span>🖥️ Node UART Output</span>
+      </button>
+      <button class="tab-btn" data-tab="network">
+        <span>🌐 ns-3 & Bridge Telemetry</span>
+      </button>
+    </div>
+
+    <div id="consoleBody" class="console-body">
+      <!-- Live log lines stream here -->
+    </div>
+  </footer>
+
+  <!-- =========================================================================
+       Custom Topology Generator Modal
+       ========================================================================= -->
+  <div id="modalGenerator" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Generate Custom Network Topology</h3>
+        <button id="btnCloseModal" class="modal-close-btn">&times;</button>
+      </div>
+
+      <form id="formGenerator" class="modal-form">
+        <div class="form-group">
+          <label>Number of Nodes (3 to 20):</label>
+          <input type="number" id="genNumNodes" class="form-input" min="3" max="20" value="6" required>
+        </div>
+
+        <div class="form-group">
+          <label>Graph Architecture:</label>
+          <select id="genGraphType" class="select-input" style="width: 100%;">
+            <option value="ring">Circular Ring (Chordal traversal)</option>
+            <option value="erdos-renyi">Erdos-Renyi Random Geometric Mesh</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Target Average Degree (for Mesh):</label>
+          <input type="number" id="genAvgDegree" class="form-input" min="2" max="10" step="0.5" value="4.0">
+        </div>
+
+        <div class="form-group">
+          <label>Per-Hop Channel Delay (ms):</label>
+          <input type="number" id="genDelayMs" class="form-input" min="0" max="200" value="20" required>
+        </div>
+
+        <div class="form-group">
+          <label>Packet Loss Rate (%):</label>
+          <input type="number" id="genLossPct" class="form-input" min="0" max="80" step="1" value="0">
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="margin-top: 10px;">
+          Generate & Load Topology
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/network_graph.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,17 +1,17 @@
 {
   "version": 1,
   "meta": {
-    "num_nodes": 3,
+    "num_nodes": 10,
     "seed": 20250103,
     "m_spaces": 12,
     "k_spaces": 5,
     "echo_threshold": 2,
-    "max_adj_nodes": 2,
-    "generator": "Ring",
+    "max_adj_nodes": 8,
+    "generator": "Erdos-Renyi",
     "target_avg_degree": 5.0,
-    "actual_avg_degree": 2.0,
-    "actual_max_degree": 2,
-    "total_links": 3
+    "actual_avg_degree": 4.6,
+    "actual_max_degree": 8,
+    "total_links": 23
   },
   "nodes": [
     {
@@ -37,8 +37,8 @@
         4,
         6
       ],
-      "x": 325.0,
-      "y": 803.1
+      "x": 783.2,
+      "y": 705.7
     },
     {
       "id": 3,
@@ -50,30 +50,261 @@
         4,
         8
       ],
-      "x": 325.0,
-      "y": 196.9
+      "x": 608.2,
+      "y": 832.9
+    },
+    {
+      "id": 4,
+      "battery": 40,
+      "spaces": [
+        0,
+        3,
+        6,
+        8,
+        9
+      ],
+      "x": 391.8,
+      "y": 832.9
+    },
+    {
+      "id": 5,
+      "battery": 20,
+      "spaces": [
+        1,
+        6,
+        8,
+        10,
+        11
+      ],
+      "x": 216.8,
+      "y": 705.7
+    },
+    {
+      "id": 6,
+      "battery": 90,
+      "spaces": [
+        0,
+        1,
+        4,
+        5,
+        9
+      ],
+      "x": 150.0,
+      "y": 500.0
+    },
+    {
+      "id": 7,
+      "battery": 70,
+      "spaces": [
+        1,
+        3,
+        8,
+        9,
+        11
+      ],
+      "x": 216.8,
+      "y": 294.3
+    },
+    {
+      "id": 8,
+      "battery": 50,
+      "spaces": [
+        0,
+        3,
+        6,
+        7,
+        10
+      ],
+      "x": 391.8,
+      "y": 167.1
+    },
+    {
+      "id": 9,
+      "battery": 30,
+      "spaces": [
+        1,
+        2,
+        4,
+        8,
+        10
+      ],
+      "x": 608.2,
+      "y": 167.1
+    },
+    {
+      "id": 10,
+      "battery": 10,
+      "spaces": [
+        0,
+        1,
+        3,
+        6,
+        7
+      ],
+      "x": 783.2,
+      "y": 294.3
     }
   ],
   "links": [
     {
       "a": 1,
       "b": 2,
-      "loss_pct": 0.0,
-      "delay_ms": 20,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 1,
+      "b": 4,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 1,
+      "b": 8,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
       "bw_bps": 9600
     },
     {
       "a": 2,
       "b": 3,
-      "loss_pct": 0.0,
-      "delay_ms": 20,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 2,
+      "b": 4,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 2,
+      "b": 5,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 2,
+      "b": 7,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 2,
+      "b": 8,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 2,
+      "b": 10,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
       "bw_bps": 9600
     },
     {
       "a": 3,
-      "b": 1,
-      "loss_pct": 0.0,
-      "delay_ms": 20,
+      "b": 4,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 3,
+      "b": 5,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 3,
+      "b": 6,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 3,
+      "b": 7,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 3,
+      "b": 10,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 4,
+      "b": 6,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 4,
+      "b": 7,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 4,
+      "b": 8,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 4,
+      "b": 9,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 4,
+      "b": 10,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 6,
+      "b": 7,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 7,
+      "b": 8,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 7,
+      "b": 9,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
+      "bw_bps": 9600
+    },
+    {
+      "a": 7,
+      "b": 10,
+      "loss_pct": 15.0,
+      "delay_ms": 30,
       "bw_bps": 9600
     }
   ]

@@ -24,6 +24,9 @@
 # Verified working: 6.2.5 (system) and 9.1.1 (venv).
 pytest>=6.2.5
 
+# GUI server for simulation control and real-time visualization
+aiohttp>=3.9.0
+
 
 # ============================================================================
 # 2. PYTHON -- OPTIONAL (only for the legacy Blom network_sim.py)
