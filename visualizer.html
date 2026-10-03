@@ -88,6 +88,81 @@
     source.onmessage = function(event) {
       const data = JSON.parse(event.data);
       
+      if (data.type === 'search') {
+        const srcId = data.source;
+        const tgtId = data.target;
+        
+        const srcIdx = ringOrder.indexOf(srcId);
+        const tgtIdx = ringOrder.indexOf(tgtId);
+        const N = ringOrder.length;
+        
+        let distRight = (tgtIdx - srcIdx + N) % N;
+        let distLeft = (srcIdx - tgtIdx + N) % N;
+        
+        let path = [];
+        if (distRight <= distLeft) {
+            for(let i=0; i<=distRight; i++) path.push(ringOrder[(srcIdx + i) % N]);
+        } else {
+            for(let i=0; i<=distLeft; i++) path.push(ringOrder[(srcIdx - i + N) % N]);
+        }
+        
+        const links = document.querySelectorAll('.link-line');
+        links.forEach(l => { l.style.stroke = '#1e293b'; l.style.strokeWidth = '1'; l.style.strokeDasharray = 'none'; });
+        
+        const nodes = document.querySelectorAll('.node');
+        nodes.forEach(n => { n.style.opacity = '0.3'; });
+        
+        path.forEach((nodeId, idx) => {
+            const el = document.getElementById('node-' + nodeId);
+            if (el) {
+                el.style.opacity = '1';
+                if (idx === 0) el.style.backgroundColor = '#16a34a'; 
+                else if (idx === path.length - 1) el.style.backgroundColor = '#eab308';
+                else el.style.backgroundColor = '#2563eb'; 
+            }
+            if (idx < path.length - 1) {
+                const n1 = nodeId;
+                const n2 = path[idx+1];
+                let lEl = document.getElementById('link-' + n1 + '-' + n2) || document.getElementById('link-' + n2 + '-' + n1);
+                if (lEl) {
+                    lEl.style.stroke = '#60a5fa';
+                    lEl.style.strokeWidth = '4';
+                    lEl.style.strokeDasharray = 'none';
+                }
+            }
+        });
+        
+        let notif = document.getElementById('search-notif');
+        if (!notif) {
+            notif = document.createElement('div');
+            notif.id = 'search-notif';
+            notif.style.position = 'absolute';
+            notif.style.bottom = '20px';
+            notif.style.left = '50%';
+            notif.style.transform = 'translateX(-50%)';
+            notif.style.padding = '12px 24px';
+            notif.style.background = '#1e40af';
+            notif.style.color = 'white';
+            notif.style.borderRadius = '8px';
+            notif.style.fontWeight = 'bold';
+            notif.style.fontSize = '16px';
+            notif.style.zIndex = '100';
+            notif.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.5)';
+            document.body.appendChild(notif);
+        }
+        notif.innerText = `Leader Tenure Cycle (20s) - Search Path: Node ${srcId} → Node ${tgtId} (${path.length-1} hops)`;
+        
+        setTimeout(() => {
+            links.forEach(l => { l.style.stroke = '#334155'; l.style.strokeWidth = '2'; l.style.strokeDasharray = '4, 4'; });
+            nodes.forEach(n => {
+                n.style.opacity = '1';
+                n.style.backgroundColor = '#1e293b';
+                if (n.classList.contains('leader')) n.style.backgroundColor = '#451a03';
+            });
+            if (notif) notif.innerText = '';
+        }, 10000);
+      }
+      
       if (data.type === 'init') {
         if (!startTime) {
             startTime = new Date();
@@ -164,6 +239,7 @@
         nodesData.push({ id, x, y });
         
         const el = document.createElement('div');
+        el.id = 'node-' + id;
         el.className = 'node';
         el.id = `node-${id}`;
         el.style.left = `${x - 20}px`;
@@ -181,6 +257,7 @@
         const nA = nodesData[i];
         const nB = nodesData[(i + 1) % ringOrder.length];
         const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.id = "link-" + nA.id + "-" + nB.id;
         line.setAttribute("x1", nA.x);
         line.setAttribute("y1", nA.y);
         line.setAttribute("x2", nB.x);

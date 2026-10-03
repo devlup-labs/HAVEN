@@ -365,9 +365,9 @@ def main():
 
     # Neighbour map: who may hear whom.
     n = len(order)
-    neigh = {order[i]: (order[(i - 1) % n], order[(i + 1) % n])
-             for i in range(n)}
-
+    neigh = {order[i]: (order[(i - 1) % n], order[(i + 1) % n]) for i in range(n)}
+    leader_active = False
+    last_search_time = time.time()
     start_sse_server()
     nodes_data = []
     for nid in order:
@@ -405,16 +405,9 @@ def main():
 
     stats = {t: 0 for t in FRAME_TYPES}
     seen_leader = set()
-    stop = False
-
-    def on_signal(sig, _frm):
-        nonlocal stop
-        stop = True
-        log(f"signal {sig}, draining")
-
-    signal.signal(signal.SIGINT, on_signal)
-    signal.signal(signal.SIGTERM, on_signal)
-
+    deadline = time.time() + run_s
+    started = time.time()
+    last_search_time = time.time()
     started = time.time()
     deadline = started + run_s
     log(f"relaying (hop delay {hop_ms} ms). Ctrl-C to stop early.")
@@ -450,6 +443,8 @@ def main():
                 src, dst, ln, ftype = fr[3], fr[4], fr[2], fr[1]
                 stats[ftype] = stats.get(ftype, 0) + 1
 
+                if ftype == 4:
+                    leader_active = True
                 if ftype == 4 and ln >= 5:                 # HEARTBEAT
                     lid = fr[HDR_LEN + 4]
                     if lid not in seen_leader:
