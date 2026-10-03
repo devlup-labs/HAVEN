@@ -412,7 +412,7 @@ def main():
     deadline = started + run_s
     log(f"relaying (hop delay {hop_ms} ms). Ctrl-C to stop early.")
 
-    while not stop and time.time() < deadline:
+    while time.time() < deadline:
         now = time.time()
 
         # Write anything whose hop delay has elapsed.
