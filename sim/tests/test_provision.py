@@ -39,7 +39,10 @@ K_SPACES = _define("HAVEN_NUM_SPACES")
 N_NODES = _define("HAVEN_PROV_NUM_NODES") if "HAVEN_PROV_NUM_NODES" in _HDR.read_text() else 10
 
 # Mirrors firmware/include/provision.h and src/provision.c
-BATTERY_TABLE = [100, 80, 60, 40, 20, 90, 70, 50, 30, 10]
+BATTERY_TABLE = [
+    100, 80, 60, 40, 20, 90, 70, 50, 30, 10,
+     95, 75, 55, 35, 15, 85, 65, 45, 25,  5
+]
 
 
 def spaces(node_id):
@@ -132,7 +135,7 @@ def test_consecutive_ids_form_a_ring_at_current_m():
     )
 
 
-@pytest.mark.parametrize("n", [3, 4, 5, 6, 7, 8, 9, 10])
+@pytest.mark.parametrize("n", list(range(3, 21)))
 def test_every_prefix_size_admits_a_ring(n):
     """start_haven.sh lets you pick NUM_NODES, so every supported size must be
     deployable. Guards the m/k ratio: if m grows, small rings stop forming."""

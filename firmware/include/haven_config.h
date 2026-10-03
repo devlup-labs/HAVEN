@@ -28,10 +28,20 @@
 /* Chordal ring: exactly two neighbours (left + right). Forwarding excludes the
    sender, so one hop per forward. Raising this degrades to mesh semantics and
    makes HAVEN_ECHO_THRESHOLD meaningless. */
+#ifndef HAVEN_MAX_ADJ_NODES
 #define HAVEN_MAX_ADJ_NODES   2
+#endif
+
 #define HAVEN_TAG_LEN         16          /* truncated HMAC length */
 #define HAVEN_HASH_LEN        8           /* discovery hash length */
+
+#ifndef HAVEN_ECHO_THRESHOLD
 #define HAVEN_ECHO_THRESHOLD  2
+#endif
+
+#ifndef HAVEN_PROV_NUM_NODES
+#define HAVEN_PROV_NUM_NODES  20
+#endif
 #define HAVEN_T_CLAIM_MS      5000
 #define HAVEN_T_WINDOW_MS     5000
 #define HAVEN_EPOCH_MS        1000

@@ -72,11 +72,11 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--nodes", type=int, default=10, help="number of nodes (default 10)")
     ap.add_argument("--k", type=int, default=5, help="spaces per node (default 5)")
-    ap.add_argument("--m", type=int, default=50, help="total spaces (default 50)")
+    ap.add_argument("--m", type=int, default=12, help="total spaces (default 12)")
     args = ap.parse_args()
 
-    if not 3 <= args.nodes <= 10:
-        sys.exit("error: --nodes must be between 3 and 10")
+    if not 3 <= args.nodes <= 20:
+        sys.exit("error: --nodes must be between 3 and 20")
 
     k_master = bytes(range(32))
     ids = list(range(1, args.nodes + 1))
@@ -101,7 +101,7 @@ def main():
     print(f'Paste into haven_ring.conf:\nRING_ORDER="{" ".join(str(i) for i in order)}"')
 
     broken = [(i, j) for i in range(1, args.nodes + 1)
-              for j in (i + 1 if i < args.nodes else 1)
+              for j in [i + 1 if i < args.nodes else 1]
               if j not in adj[i]]
     print(f"\nFor comparison, a numeric id-ordered ring would break "
           f"{len(broken)} of {args.nodes} edges.")

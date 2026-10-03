@@ -14,6 +14,9 @@ cmake_install.cmake
 Makefile
 
 # ── Python ─────────────────────────────────────────────────────────────────────
+.venv
+.venv/
+sim/.venv
 sim/.venv/
 __pycache__/
 *.pyc
@@ -51,4 +54,5 @@ gdb.txt
 
 # ── ns-3 (for later) ───────────────────────────────────────────────────────────
 ns3/build/
+ns-3-dev/
 scratch/*.cc.bak

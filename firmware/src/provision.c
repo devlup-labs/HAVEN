@@ -65,8 +65,10 @@ int provision_battery(uint8_t node_id)
 
 const uint8_t *provision_battery_table(void)
 {
-    static const uint8_t table[HAVEN_PROV_NUM_NODES] =
-        { 100, 80, 60, 40, 20, 90, 70, 50, 30, 10 };
+    static const uint8_t table[HAVEN_PROV_NUM_NODES] = {
+        100, 80, 60, 40, 20, 90, 70, 50, 30, 10,
+         95, 75, 55, 35, 15, 85, 65, 45, 25,  5
+    };
     return table;
 }
 

@@ -16,8 +16,20 @@ set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/linker.ld")
 
 # NODE_ID selects which node this ELF is provisioned as. Each ring node needs
 # its own ELF (e.g. cmake -B build2 -DNODE_ID=2).
-set(NODE_ID "1" CACHE STRING "Node id this firmware image is provisioned as (1..10)")
+set(NODE_ID "1" CACHE STRING "Node id this firmware image is provisioned as (1..20)")
 add_compile_definitions(HAVEN_NODE_ID=${NODE_ID})
+
+if(DEFINED HAVEN_MAX_ADJ_NODES)
+    add_compile_definitions(HAVEN_MAX_ADJ_NODES=${HAVEN_MAX_ADJ_NODES})
+endif()
+
+if(DEFINED HAVEN_ECHO_THRESHOLD)
+    add_compile_definitions(HAVEN_ECHO_THRESHOLD=${HAVEN_ECHO_THRESHOLD})
+endif()
+
+if(DEFINED HAVEN_PROV_NUM_NODES)
+    add_compile_definitions(HAVEN_PROV_NUM_NODES=${HAVEN_PROV_NUM_NODES})
+endif()
 
 
 file(GLOB_RECURSE SOURCES

@@ -7,9 +7,9 @@
 #define HAVEN_PROV_SEEN_BITS  8
 #define HAVEN_PROV_SEEN_BYTES 8
 
-/* Nodes this build can be provisioned as. */
+#include "haven_config.h"
 #ifndef HAVEN_PROV_NUM_NODES
-#define HAVEN_PROV_NUM_NODES 10
+#define HAVEN_PROV_NUM_NODES 20
 #endif
 
 /* Total spaces in the deployment. Derived from HAVEN_M_SPACES rather than
