@@ -281,13 +281,17 @@ void haven_run(void)
     mode = (odds > prob) ? M_ELECTION : M_PASSTHROUGH;
 
     /* PHASE 3 */
-    best_score = 0; best_origin = 0;                    /* [CONFIRM] non-election nodes' initial best */
+    /* best_score and best_origin are preserved from any early ELECTION packets */
     if (mode == M_ELECTION) {
-        best_score = internal_score; best_origin = g_cfg.id;
-        score_tag(internal_score, g_cfg.id, my_hs);
-        memcpy(best_hs, my_hs, TAG);
-        echo_count = 0; timeout_started = 0;
-        tx_election(internal_score, g_cfg.id, my_hs, HAVEN_ID_NONE);
+        if (internal_score > best_score || (internal_score == best_score && g_cfg.id > best_origin)) {
+            best_score = internal_score; best_origin = g_cfg.id;
+            score_tag(internal_score, g_cfg.id, my_hs);
+            memcpy(best_hs, my_hs, TAG);
+            echo_count = 0; timeout_started = 0;
+            tx_election(internal_score, g_cfg.id, my_hs, HAVEN_ID_NONE);
+        } else {
+            mode = M_PASSTHROUGH;
+        }
     }
 
     for (;;) {
