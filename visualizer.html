@@ -65,7 +65,6 @@
 
   <script>
     let ringOrder = [];
-    let ringOrder = [];
     let serverNodesData = [];
     let nodeEnergy = {}; // {id: {battery: float, score_base: int}}
     let nodesData = [];
@@ -100,7 +99,7 @@
       const ms = Math.floor((diff % 1000) / 100).toString();
       document.getElementById('clock').innerText = `${m}:${s}.${ms}`;
     }
-    const source = new EventSource('/events');
+    const source = new EventSource('http://127.0.0.1:8080/events');
     
     source.onmessage = function(event) {
       const data = JSON.parse(event.data);
