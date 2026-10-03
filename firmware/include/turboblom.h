@@ -1,6 +1,8 @@
 #ifndef TURBOBLOM_C
 #define TURBOBLOM_C
 
+#include <stdint.h>
+
 int compute_K_AB(
     uint8_t node_a,
     uint8_t node_b,

@@ -14,14 +14,16 @@ set(CPU_FLAGS "-mcpu=cortex-m3 -mthumb")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CPU_FLAGS} -O0 -g -Wall")
 set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/linker.ld")
 
+# NODE_ID selects which node this ELF is provisioned as. Each ring node needs
+# its own ELF (e.g. cmake -B build2 -DNODE_ID=2).
+set(NODE_ID "1" CACHE STRING "Node id this firmware image is provisioned as (1..10)")
+add_compile_definitions(HAVEN_NODE_ID=${NODE_ID})
 
-set(SOURCES src/main.c src/uart.c 
-            src/startup.c 
-            src/crypto.c
-            src/turboblom.c
-            src/neighbor_table.c
-            src/protocol.c
-    )
+
+file(GLOB_RECURSE SOURCES
+    CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
+)
 
 add_executable(haven.elf ${SOURCES})
 target_include_directories(haven.elf PRIVATE include)

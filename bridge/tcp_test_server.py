@@ -1,5 +1,6 @@
 import socket
 import threading
+import os, hmac, hashlib, struct, time   # added
 
 HOST = "127.0.0.1"
 PORT = 5000
@@ -36,14 +37,33 @@ def receive_data():
             flush=True
         )
 
-def send_data():
+def send_data():                                   # replaced
     while True:
         message = input()
+        if not message:
+            continue
+        if message.startswith("hex:"):
+            raw = bytes.fromhex(message[4:].replace(" ", ""))
+        else:
+            raw = (message + "\r\n").encode()
+        print("[server] Sending message...", flush=True)
+        conn.sendall(raw)
+        print("[server] message sent", flush=True)
 
-        if message:
-            print("[server] Sending message...", flush=True)
-            conn.sendall((message + "\r\n").encode())
-            print("[server] message sent", flush=True)
+def fake_peer_frame():                             # added
+    K = bytes(range(32)); pid = 2; spaces = bytes([7, 10, 19, 24, 37])
+    body = bytes([pid]) + spaces + struct.pack('<I', 1)
+    payload = body + hmac.new(K, body, hashlib.sha256).digest()[:8]
+    return bytes([0xA5, 1, len(payload), pid, 0xFF]) + payload
+
+def fake_peer():                                   # added
+    end = time.time() + 15
+    while time.time() < end:
+        conn.sendall(fake_peer_frame())
+        time.sleep(0.4)
+
+if os.environ.get("HAVEN_FAKE_PEER"):              # added
+    threading.Thread(target=fake_peer, daemon=True).start()
 
 receive_thread = threading.Thread(target=receive_data)
 send_thread = threading.Thread(target=send_data)
