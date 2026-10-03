@@ -203,7 +203,9 @@
         initGraph();
       } else if (data.type === 'packet') {
         if (data.sender && nodeEnergy[data.sender]) {
-            nodeEnergy[data.sender].battery = Math.max(0, nodeEnergy[data.sender].battery - 0.05);
+            // Drain 0.2% PER target link the packet is transmitted on
+            const cost = 0.2 * (data.targets ? data.targets.length : 1);
+            nodeEnergy[data.sender].battery = Math.max(0, nodeEnergy[data.sender].battery - cost);
             updateNodeDOM(data.sender);
         }
 
