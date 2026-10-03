@@ -24,7 +24,7 @@
    If you raise this, recompute the ring order: sim/compute_ring_order.py */
 #define HAVEN_M_SPACES        12
 
-/* ---- TODO: not defined anywhere, fill in ---- */
+
 /* Chordal ring: exactly two neighbours (left + right). Forwarding excludes the
    sender, so one hop per forward. Raising this degrades to mesh semantics and
    makes HAVEN_ECHO_THRESHOLD meaningless. */
@@ -52,7 +52,7 @@ typedef struct {
 } node_config_t;
 
 extern node_config_t g_cfg;
-void node_config_load(void);   /* TODO: how does each node get id/spaces/K_master/battery? */
+void node_config_load(void);   
 
 #define HAVEN_LOG(...) ((void)0) /* UART is the radio channel; don't print on it */
 #endif

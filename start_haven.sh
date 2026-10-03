@@ -24,7 +24,7 @@ LOG_DIR="/tmp/haven_logs"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --config)  CONFIG="$2"; shift 2 ;;
-        --verbose) VERBOSE="--verbose"; shift ;;
+        --verbose) VERBOSE=""; shift ;;
         --help|-h) sed -n '2,12p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
