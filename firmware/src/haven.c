@@ -39,7 +39,15 @@ static uint8_t  echo_count, timeout_started;
 static uint32_t epoch_counter, last_hb_counter;
 static uint8_t  leader_id = HAVEN_ID_NONE;
 
-static uint32_t claim_dl, window_dl, vote_dl, epoch_dl;
+static uint32_t claim_dl, window_dl, vote_dl, epoch_dl, hb_timeout_dl;
+__attribute__((section(".noinit"))) static uint16_t sim_bat_milli;
+__attribute__((section(".noinit"))) static uint32_t bat_magic;
+
+static void drain_battery(uint16_t amount) {
+    if (sim_bat_milli > amount) sim_bat_milli -= amount;
+    else sim_bat_milli = 0;
+}
+
 static uint8_t  claim_on, window_on, vote_on, vote_origin;
 
 static uint64_t prng_seed;
@@ -142,7 +150,7 @@ static void tx_election(uint16_t score, uint8_t origin, const uint8_t *hs, uint8
         p[3 + TAG] = g_cfg.id; put32(p + 4 + TAG, t);
         put16(m, score); m[2] = origin; m[3] = g_cfg.id; put32(m + 4, t);
         tag(nb[i].key, HAVEN_KEY_LEN, m, 8, p + 8 + TAG);   /* hmac_replay, per-neighbour K_AB [CONFIRM] */
-        link_send(nb[i].id, T_ELECTION, p, ELEC_LEN);
+        link_send(nb[i].id, T_ELECTION, p, ELEC_LEN); drain_battery(200);
     }
 }
 static void on_election(const frame_t *f)
@@ -203,8 +211,7 @@ static void tx_claim(uint16_t score, uint8_t origin, const uint8_t *hs, uint32_t
     uint8_t p[CLAIM_LEN];
     p[0] = origin; put16(p + 1, score); memcpy(p + 3, hs, TAG);
     put32(p + 3 + TAG, t); claim_tag(origin, t, p + 7 + TAG);
-    for (uint8_t i = 0; i < nb_n; i++)
-        if (nb[i].id != exclude) link_send(nb[i].id, T_CLAIM, p, CLAIM_LEN);
+    for (uint8_t i = 0; i < nb_n; i++) { if (nb[i].id != exclude) { link_send(nb[i].id, T_CLAIM, p, CLAIM_LEN); drain_battery(200); } }
 }
 static void on_claim(const frame_t *f)
 {
@@ -232,7 +239,16 @@ static void on_heartbeat(const frame_t *f)
     if (!tag_ok(g_cfg.k_master, 32, mc, 4, p + 5)) return;
     if (!tag_ok(g_cfg.k_master, 32, ml, 1, p + 5 + TAG)) return;
     if (ctr <= last_hb_counter) return;                /* "counter freshness" [CONFIRM] */
-    last_hb_counter = ctr; leader_id = lid; mode = M_PASSTHROUGH;
+    last_hb_counter = ctr; leader_id = lid; mode = M_PASSTHROUGH; hb_timeout_dl = time_ms() + 1000u;
+    
+    // Forward the heartbeat to the other neighbor
+    for (uint8_t i = 0; i < nb_n; i++) {
+        if (nb[i].id != f->src) {
+            link_send(nb[i].id, T_HEARTBEAT, p, HB_LEN);
+            drain_battery(200);
+        }
+    }
+
     /* Deliberate deviation: pseudocode:165-168 only sets leader_id and mode, but
        a pending T_window would otherwise fire PHASE 8 and make this node LEADER
        too. PASSTHROUGH means yield, so clear every timer that could promote us. */
@@ -246,7 +262,7 @@ static void tx_heartbeat(void)
     put32(mc, epoch_counter); ml[0] = g_cfg.id;
     tag(g_cfg.k_master, 32, mc, 4, p + 5);
     tag(g_cfg.k_master, 32, ml, 1, p + 5 + TAG);
-    for (uint8_t i = 0; i < nb_n; i++) link_send(nb[i].id, T_HEARTBEAT, p, HB_LEN);
+    for (uint8_t i = 0; i < nb_n; i++) { link_send(nb[i].id, T_HEARTBEAT, p, HB_LEN); drain_battery(200); }
 }
 
 /* ---------- dispatch ---------- */
@@ -265,7 +281,11 @@ static void dispatch(const frame_t *f)
 void haven_run(void)
 {
     frame_t f;
-    prng_seed = g_cfg.id;                               /* [CONFIRM] initial_random_seed() */
+    prng_seed = g_cfg.id;
+    if (bat_magic != 0x1337BEEF) {
+        sim_bat_milli = g_cfg.battery_pct * 1000u;
+        bat_magic = 0x1337BEEF;
+    }                               /* [CONFIRM] initial_random_seed() */
 
     /* PHASE 1 */
     uint32_t end = time_ms() + HAVEN_T_WINDOW_MS + (prng_next() % 100u);
@@ -279,8 +299,8 @@ void haven_run(void)
     }
 
     /* PHASE 2 */
-    internal_score = g_cfg.battery_pct + nb_n;
-    uint32_t odds = (((uint32_t)HAVEN_L_WEIGHT * g_cfg.battery_pct * 1000u) / 100u +
+    internal_score = (sim_bat_milli / 1000u) + nb_n;
+    uint32_t odds = (((uint32_t)HAVEN_L_WEIGHT * (sim_bat_milli / 1000u) * 1000u) / 100u +
                      ((uint32_t)HAVEN_M_WEIGHT * nb_n * 1000u) / HAVEN_MAX_ADJ_NODES) / 2u;
     if (odds < 1u) odds = 1u;                            /* max(1, ...) is a FLOOR (pseudocode:48) */
     uint32_t prob = (uint32_t)(((uint64_t)prng_next() * 1000u) / HAVEN_PRNG_M);
@@ -321,6 +341,15 @@ void haven_run(void)
         if (vote_on && expired(vote_dl)) vote_on = 0;
         if (mode == M_LEADER && expired(epoch_dl)) {    /* PHASE 9 */
             tx_heartbeat(); epoch_dl = time_ms() + HAVEN_EPOCH_MS;
+            epoch_counter++;
+            if (epoch_counter * HAVEN_EPOCH_MS >= 20000u) {
+                // Tenure over! Reboot the node to step down.
+                (*((volatile uint32_t *)0xE000ED0C)) = (0x5FA << 16) | (1 << 2);
+            }
+        }
+        if (mode == M_PASSTHROUGH && leader_id != HAVEN_ID_NONE && expired(hb_timeout_dl)) {
+            // Heartbeat lost! Reboot to restart election!
+            (*((volatile uint32_t *)0xE000ED0C)) = (0x5FA << 16) | (1 << 2);
         }
     }
 }
