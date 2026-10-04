@@ -34,7 +34,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const statBoxElection = document.getElementById('statBoxElection');
   const statBoxClaim = document.getElementById('statBoxClaim');
   const statBoxHeartbeat = document.getElementById('statBoxHeartbeat');
+  const statBoxJoinResign = document.getElementById('statBoxJoinResign');
   const statBoxDropped = document.getElementById('statBoxDropped');
+
+  // Partition & Merge Elements
+  const btnSplitNetwork = document.getElementById('btnSplitNetwork');
+  const btnJoinNetworks = document.getElementById('btnJoinNetworks');
+  const partitionBadge = document.getElementById('partitionBadge');
+  const partitionCountLabel = document.getElementById('partitionCountLabel');
+  const partitionDetailsText = document.getElementById('partitionDetailsText');
 
   // Node Inspector Elements
   const inspectorEmpty = document.getElementById('inspectorEmpty');
@@ -78,11 +86,16 @@ document.addEventListener('DOMContentLoaded', () => {
   let topologyData = null;
   let socket = null;
   let packetHistory = [];
+  let currentLeaderId = null;
 
   // Initialize Network Canvas Graph
   const graph = new NetworkGraph('networkCanvas', node => {
     selectedNode = node;
     renderNodeInspector(node);
+    const crashInput = document.getElementById('crashNodeId');
+    if (crashInput) crashInput.value = node.id;
+    const battInput = document.getElementById('battNodeId');
+    if (battInput) battInput.value = node.id;
   });
 
   // Attach canvas buttons
@@ -187,11 +200,34 @@ document.addEventListener('DOMContentLoaded', () => {
         renderNodeInspector(graph.nodes.get(ev.node_id));
       }
     } else if (evType === 'leader_elected') {
+      currentLeaderId = ev.leader_id;
       metricLeader.textContent = `Node ${ev.leader_id}`;
       metricLeader.classList.add('highlight-emerald');
       showConvergenceBanner(ev.leader_id, ev.hop || 0);
-      graph.updateNodeState(ev.leader_id, { mode: 'LEADER' });
+      graph.updateNodeState(ev.leader_id, { mode: 'LEADER', alive: true });
       updateCountersFromGraph();
+      if (selectedNode) {
+        renderNodeInspector(graph.nodes.get(selectedNode.id));
+      }
+    } else if (evType === 'leader_lost') {
+      currentLeaderId = null;
+      hideConvergenceBanner();
+      metricLeader.textContent = 'Electing...';
+      metricLeader.classList.remove('highlight-emerald');
+      if (ev.former_leader) {
+        graph.updateNodeState(ev.former_leader, { alive: false, mode: 'OFFLINE' });
+      }
+      updateCountersFromGraph();
+      if (selectedNode) {
+        renderNodeInspector(graph.nodes.get(selectedNode.id));
+      }
+      addConsoleLine('protocol', `Consensus Alert: Leader Node ${ev.former_leader} is offline! Initiating failover re-election...`, 'warn');
+    } else if (evType === 're_election_started') {
+      currentLeaderId = null;
+      hideConvergenceBanner();
+      metricLeader.textContent = 'Electing...';
+      metricLeader.classList.remove('highlight-emerald');
+      addConsoleLine('protocol', `Failover Re-election underway across surviving nodes: [${ev.alive_nodes.join(', ')}]`, 'info');
     } else if (evType === 'step_complete') {
       metricHop.textContent = ev.hop;
       metricTime.textContent = `${ev.time_ms} ms`;
@@ -199,17 +235,67 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStatsDisplays(ev.stats);
       }
       if (ev.leader) {
+        currentLeaderId = ev.leader;
         metricLeader.textContent = `Node ${ev.leader}`;
+      }
+      if (ev.node_batteries) {
+        for (const [nidStr, bVal] of Object.entries(ev.node_batteries)) {
+          const nid = parseInt(nidStr, 10);
+          graph.updateNodeState(nid, { battery: bVal });
+        }
+        if (selectedNode) {
+          const curr = graph.nodes.get(selectedNode.id);
+          if (curr) renderNodeInspector(curr);
+        }
       }
     } else if (evType === 'link_state') {
       graph.setLinkState(ev.u, ev.v, ev.disabled);
     } else if (evType === 'node_alive') {
-      graph.updateNodeState(ev.node_id, { alive: ev.alive });
-    } else if (evType === 'node_battery') {
-      graph.updateNodeState(ev.node_id, { battery: ev.battery });
+      graph.updateNodeState(ev.node_id, { alive: ev.alive, mode: ev.alive ? 'PASSTHROUGH' : 'OFFLINE' });
+      updateCountersFromGraph();
       if (selectedNode && selectedNode.id === ev.node_id) {
         renderNodeInspector(graph.nodes.get(ev.node_id));
       }
+      if (!ev.alive && currentLeaderId === ev.node_id) {
+        currentLeaderId = null;
+        hideConvergenceBanner();
+        metricLeader.textContent = 'Electing...';
+        metricLeader.classList.remove('highlight-emerald');
+      }
+    } else if (evType === 'node_battery') {
+      const updates = { battery: ev.battery };
+      if (ev.score !== undefined) updates.score = ev.score;
+      if (ev.alive !== undefined) updates.alive = ev.alive;
+      graph.updateNodeState(ev.node_id, updates);
+      if (selectedNode && selectedNode.id === ev.node_id) {
+        Object.assign(selectedNode, updates);
+        renderNodeInspector(graph.nodes.get(ev.node_id));
+      }
+    } else if (evType === 'node_battery_depleted') {
+      addConsoleLine('chaos', `CRITICAL: Node #${ev.node_id} battery reached 0%! Going OFFLINE.`, 'error');
+    } else if (evType === 'leader_resigned') {
+      currentLeaderId = null;
+      hideConvergenceBanner();
+      metricLeader.textContent = 'Electing...';
+      metricLeader.classList.remove('highlight-emerald');
+      const reason = ev.reason || 'low_battery';
+      if (reason === 'network_merge') {
+        addConsoleLine('protocol', `Phase 13 Resignation: Leader #${ev.former_leader} stepped down to merge with Foreign Network (Leader #${ev.foreign_leader})!`, 'warn');
+      } else {
+        addConsoleLine('protocol', `Consensus Alert: Leader Node #${ev.former_leader} battery low (${ev.battery}%)! Resigning leadership for consensus handover...`, 'warn');
+      }
+    } else if (evType === 'network_split') {
+      addConsoleLine('protocol', `Phase 12 Split: Network partitioned into ${ev.partitions?.length || 2} isolated segments! Severed links: ${JSON.stringify(ev.severed_links)}`, 'warn');
+    } else if (evType === 'network_join') {
+      addConsoleLine('protocol', `Phase 13 Join: Bridge links reconnected (${JSON.stringify(ev.reconnected_links)})! Initiating cross-network handshake and foreign leader resignation...`, 'info');
+    } else if (evType === 'join_request_initiated') {
+      addConsoleLine('protocol', `Phase 13 Handshake: Border Node #${ev.border_node} detected Foreign Leader #${ev.foreign_leader}. Routing JOIN_REQUEST to current leader #${ev.target_leader}...`, 'info');
+    } else if (evType === 'join_request_received_at_leader') {
+      addConsoleLine('protocol', `Phase 13 Merge: Leader #${ev.leader_id} received JOIN_REQUEST (${ev.count}/${ev.threshold}). Preparing resignation to unite topologies!`, 'warn');
+    } else if (evType === 'partition_confirmed') {
+      addConsoleLine('protocol', `Phase 12 Partition: Component [${ev.component_nodes?.join(', ')}] confirmed isolation from former leader #${ev.former_leader}. Triggering local re-election!`, 'warn');
+    } else if (evType === 'battery_drain_config') {
+      updateBatteryDrainUI(ev.enabled, ev.rate, ev.node_tx_cost, ev.leader_tx_cost);
     }
   }
 
@@ -221,17 +307,53 @@ document.addEventListener('DOMContentLoaded', () => {
     statusPill.className = `status-pill ${simulationStatus.toLowerCase()}`;
     statusText.textContent = simulationStatus;
 
-    if (status.leader) {
+    if (status.leaders && status.leaders.length > 1) {
+      metricLeader.textContent = status.leaders.map(l => `👑 #${l}`).join(' • ');
+      metricLeader.classList.add('highlight-emerald');
+    } else if (status.leader) {
+      currentLeaderId = status.leader;
       metricLeader.textContent = `Node ${status.leader}`;
+      metricLeader.classList.add('highlight-emerald');
     } else if (simulationStatus === 'RUNNING') {
+      currentLeaderId = null;
       metricLeader.textContent = 'Electing...';
+      metricLeader.classList.remove('highlight-emerald');
+      hideConvergenceBanner();
     } else {
+      currentLeaderId = null;
       metricLeader.textContent = 'None';
+      metricLeader.classList.remove('highlight-emerald');
+      hideConvergenceBanner();
+    }
+
+    if (partitionBadge && partitionCountLabel && partitionDetailsText) {
+      if (status.is_partitioned && status.partitions && status.partitions.length > 1) {
+        partitionBadge.className = 'panel-badge badge-warning';
+        partitionBadge.textContent = `${status.partitions.length} Partitions`;
+        partitionCountLabel.textContent = `${status.partitions.length} Isolated Clusters`;
+        partitionCountLabel.style.color = 'var(--color-amber)';
+        const partsSummary = status.partitions.map(p => `Net ${p.id}: [${p.nodes.join(',')}] (${p.leader ? '👑 #' + p.leader : 'No Leader'})`).join(' • ');
+        partitionDetailsText.textContent = partsSummary;
+      } else {
+        partitionBadge.className = 'panel-badge badge-success';
+        partitionBadge.textContent = 'Single Net';
+        partitionCountLabel.textContent = '1 Component';
+        partitionCountLabel.style.color = 'var(--color-cyan)';
+        partitionDetailsText.textContent = 'Connected • All nodes share active consensus';
+      }
     }
 
     if (status.hop !== undefined) metricHop.textContent = status.hop;
     if (status.sim_time_ms !== undefined) metricTime.textContent = `${status.sim_time_ms} ms`;
     if (status.stats) updateStatsDisplays(status.stats);
+    if (status.battery_drain_enabled !== undefined) {
+      updateBatteryDrainUI(
+        status.battery_drain_enabled,
+        status.battery_drain_rate,
+        status.node_tx_cost,
+        status.leader_tx_cost
+      );
+    }
 
     btnStart.style.display = simulationStatus === 'RUNNING' ? 'none' : 'inline-flex';
     btnPause.style.display = simulationStatus === 'RUNNING' ? 'inline-flex' : 'none';
@@ -242,6 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (statBoxElection) statBoxElection.textContent = stats.ELECTION || 0;
     if (statBoxClaim) statBoxClaim.textContent = stats.CLAIM || 0;
     if (statBoxHeartbeat) statBoxHeartbeat.textContent = stats.HEARTBEAT || 0;
+    if (statBoxJoinResign) statBoxJoinResign.textContent = (stats.JOIN_REQUEST || 0) + (stats.RESIGNATION || 0) + (stats.FIND_LEADER || 0);
     if (statBoxDropped) statBoxDropped.textContent = stats.DROPPED || 0;
     if (metricFrames) metricFrames.textContent = stats.TOTAL || 0;
   }
@@ -252,6 +375,10 @@ document.addEventListener('DOMContentLoaded', () => {
       'ELECTION': statBoxElection,
       'CLAIM': statBoxClaim,
       'HEARTBEAT': statBoxHeartbeat,
+      'JOIN_REQUEST': statBoxJoinResign,
+      'RESIGNATION': statBoxJoinResign,
+      'FIND_LEADER': statBoxJoinResign,
+      'LEADER_ACK': statBoxJoinResign,
       'DROPPED': statBoxDropped
     };
     const el = elMap[type];
@@ -306,9 +433,15 @@ document.addEventListener('DOMContentLoaded', () => {
     inspectorEmpty.style.display = 'none';
     inspectorContent.style.display = 'flex';
 
-    inspNodeId.textContent = `Node #${node.id}`;
+    inspNodeId.textContent = node.partition ? `Node #${node.id} (Net ${node.partition})` : `Node #${node.id}`;
     inspModeBadge.textContent = node.alive ? node.mode : 'OFFLINE';
-    inspModeBadge.className = `node-mode-badge ${node.mode.toLowerCase()}`;
+    inspModeBadge.className = `node-mode-badge ${node.alive ? node.mode.toLowerCase() : 'drop'}`;
+
+    const btnInspToggle = document.getElementById('btnInspToggleNode');
+    if (btnInspToggle) {
+      btnInspToggle.textContent = node.alive ? '✕ Kill Node' : '💚 Revive Node';
+      btnInspToggle.className = node.alive ? 'btn btn-danger' : 'btn btn-success';
+    }
 
     // Battery
     inspBatteryPct.textContent = `${node.battery}%`;
@@ -367,7 +500,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function applyPacketFilter() {
     Array.from(packetList.children).forEach(card => {
-      if (activeFilter === 'ALL' || card.dataset.type === activeFilter) {
+      const cType = card.dataset.type;
+      if (activeFilter === 'ALL') {
+        card.style.display = 'flex';
+      } else if (activeFilter === 'JOIN_REQUEST') {
+        const isJoinType = cType === 'JOIN_REQUEST' || cType === 'RESIGNATION' || cType === 'FIND_LEADER' || cType === 'LEADER_ACK';
+        card.style.display = isJoinType ? 'flex' : 'none';
+      } else if (cType === activeFilter) {
         card.style.display = 'flex';
       } else {
         card.style.display = 'none';
@@ -508,12 +647,146 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  document.getElementById('btnInspToggleNode')?.addEventListener('click', () => {
+    if (selectedNode) {
+      sendCommand({ action: 'toggle_node', node_id: selectedNode.id });
+    }
+  });
+
   document.getElementById('btnSetBattery')?.addEventListener('click', () => {
     const nid = parseInt(document.getElementById('battNodeId').value, 10);
     const batt = parseInt(document.getElementById('battLevel').value, 10);
     if (!isNaN(nid) && !isNaN(batt)) {
       sendCommand({ action: 'set_battery', node_id: nid, battery: batt });
     }
+  });
+
+  // ----------------------------------------------------------- Dynamic Battery Drain Controls
+  const chkDynamicBattery = document.getElementById('chkDynamicBattery');
+  const rngDrainRate = document.getElementById('rngDrainRate');
+  const valDrainRate = document.getElementById('valDrainRate');
+  const batteryDrainStatusBadge = document.getElementById('batteryDrainStatusBadge');
+  const inpNodeTxCost = document.getElementById('inpNodeTxCost');
+  const inpLeaderTxCost = document.getElementById('inpLeaderTxCost');
+  const btnApplyDrainRates = document.getElementById('btnApplyDrainRates');
+
+  function updateBatteryDrainUI(enabled, rate, nodeTxCost, leaderTxCost) {
+    if (chkDynamicBattery && enabled !== undefined) chkDynamicBattery.checked = !!enabled;
+    if (rngDrainRate && rate !== undefined) rngDrainRate.value = rate;
+    if (valDrainRate && rate !== undefined) valDrainRate.textContent = `${rate}x`;
+    if (inpNodeTxCost && nodeTxCost !== undefined && document.activeElement !== inpNodeTxCost) {
+      inpNodeTxCost.value = parseFloat(nodeTxCost).toFixed(1);
+    }
+    if (inpLeaderTxCost && leaderTxCost !== undefined && document.activeElement !== inpLeaderTxCost) {
+      inpLeaderTxCost.value = parseFloat(leaderTxCost).toFixed(1);
+    }
+    if (batteryDrainStatusBadge) {
+      const curRate = rate !== undefined ? rate : (rngDrainRate ? rngDrainRate.value : '1.0');
+      if (enabled) {
+        batteryDrainStatusBadge.textContent = `${curRate}x Active`;
+        batteryDrainStatusBadge.className = 'panel-badge badge-success';
+      } else {
+        batteryDrainStatusBadge.textContent = 'Disabled';
+        batteryDrainStatusBadge.className = 'panel-badge badge-muted';
+      }
+    }
+    // Update active rate preset button
+    document.querySelectorAll('.btn-rate-preset').forEach(btn => {
+      const bRate = parseFloat(btn.getAttribute('data-rate'));
+      const activeRate = rate !== undefined ? rate : parseFloat(rngDrainRate ? rngDrainRate.value : 1.0);
+      if (Math.abs(bRate - activeRate) < 0.05) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
+  function sendDrainConfig(extraParams = {}) {
+    const enabled = chkDynamicBattery ? chkDynamicBattery.checked : true;
+    const rate = parseFloat(rngDrainRate?.value) || 1.0;
+    const node_tx_cost = parseFloat(inpNodeTxCost?.value) >= 0 ? parseFloat(inpNodeTxCost.value) : 0.5;
+    const leader_tx_cost = parseFloat(inpLeaderTxCost?.value) >= 0 ? parseFloat(inpLeaderTxCost.value) : 1.5;
+    sendCommand({
+      action: 'set_battery_drain',
+      enabled,
+      rate,
+      node_tx_cost,
+      leader_tx_cost,
+      ...extraParams
+    });
+  }
+
+  chkDynamicBattery?.addEventListener('change', () => {
+    sendDrainConfig();
+  });
+
+  rngDrainRate?.addEventListener('input', () => {
+    const rate = parseFloat(rngDrainRate.value) || 1.0;
+    if (valDrainRate) valDrainRate.textContent = `${rate.toFixed(1)}x`;
+  });
+
+  rngDrainRate?.addEventListener('change', () => {
+    sendDrainConfig();
+  });
+
+  document.querySelectorAll('.btn-rate-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const rate = parseFloat(btn.getAttribute('data-rate'));
+      if (!isNaN(rate)) {
+        if (rngDrainRate) rngDrainRate.value = rate;
+        if (valDrainRate) valDrainRate.textContent = `${rate}x`;
+        if (chkDynamicBattery) chkDynamicBattery.checked = true;
+        sendDrainConfig({ enabled: true, rate });
+      }
+    });
+  });
+
+  btnApplyDrainRates?.addEventListener('click', () => {
+    sendDrainConfig();
+    const origHtml = btnApplyDrainRates.innerHTML;
+    btnApplyDrainRates.innerHTML = '✓ Rates Applied!';
+    btnApplyDrainRates.style.borderColor = 'var(--color-emerald)';
+    btnApplyDrainRates.style.color = 'var(--color-emerald)';
+    setTimeout(() => {
+      btnApplyDrainRates.innerHTML = origHtml;
+      btnApplyDrainRates.style.borderColor = '';
+      btnApplyDrainRates.style.color = '';
+    }, 1200);
+  });
+
+  inpNodeTxCost?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      btnApplyDrainRates?.click();
+    }
+  });
+
+  inpLeaderTxCost?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      btnApplyDrainRates?.click();
+    }
+  });
+
+  document.getElementById('btnDrainLeaderLow')?.addEventListener('click', () => {
+    sendCommand({ action: 'drain_leader', battery: 15 });
+  });
+
+  document.getElementById('btnDrainLeaderZero')?.addEventListener('click', () => {
+    sendCommand({ action: 'drain_leader', battery: 0 });
+  });
+
+  document.getElementById('btnRechargeAll')?.addEventListener('click', () => {
+    sendCommand({ action: 'recharge_all' });
+  });
+
+  btnSplitNetwork?.addEventListener('click', () => {
+    sendCommand({ action: 'split_network' });
+    addConsoleLine('chaos', '⚡ Triggered Network Split (Phase 12: Severing bridge links & isolated re-election)', 'warn');
+  });
+
+  btnJoinNetworks?.addEventListener('click', () => {
+    sendCommand({ action: 'join_networks' });
+    addConsoleLine('protocol', '🔗 Triggered Network Join (Phase 13: Bridge reconnection, foreign leader resignation & merge)', 'info');
   });
 
   // ----------------------------------------------------------- Topology Generator Modal

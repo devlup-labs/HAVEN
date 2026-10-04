@@ -79,12 +79,21 @@ class HavenGuiServer:
         self._init_fast_engine()
 
     def _init_fast_engine(self):
+        prev_drain_enabled = self.sim_engine.battery_drain_enabled if self.sim_engine else True
+        prev_drain_rate = self.sim_engine.battery_drain_rate if self.sim_engine else 1.0
+        prev_node_tx_cost = self.sim_engine.node_tx_cost if self.sim_engine else 0.5
+        prev_leader_tx_cost = self.sim_engine.leader_tx_cost if self.sim_engine else 1.5
         if self.sim_engine:
             self.sim_engine.stop()
         self.sim_engine = HavenSimEngine(
             self.current_topology,
             event_callback=self._on_engine_event
         )
+        self.sim_engine.battery_drain_enabled = prev_drain_enabled
+        self.sim_engine.battery_drain_rate = prev_drain_rate
+        self.sim_engine.node_tx_cost = prev_node_tx_cost
+        self.sim_engine.leader_tx_cost = prev_leader_tx_cost
+        self.sim_engine.tx_cost = prev_node_tx_cost
 
     def _setup_routes(self):
         # WebSocket
@@ -103,6 +112,10 @@ class HavenGuiServer:
         self.app.router.add_post("/api/sim/step", self.api_step_sim)
         self.app.router.add_post("/api/sim/speed", self.api_set_speed)
         self.app.router.add_post("/api/sim/fault", self.api_inject_fault)
+        self.app.router.add_post("/api/sim/battery_drain", self.api_set_battery_drain)
+        self.app.router.add_post("/api/sim/recharge", self.api_recharge_all)
+        self.app.router.add_post("/api/sim/split", self.api_split_network)
+        self.app.router.add_post("/api/sim/join", self.api_join_networks)
         self.app.router.add_get("/api/logs", self.api_get_logs)
 
         # Static files
@@ -179,6 +192,47 @@ class HavenGuiServer:
         elif ev_type == "leader_elected":
             log_line = f"CONVERGENCE! Node {ev['leader_id']} elected LEADER (Score {ev.get('score')}) in {ev.get('hop')} hops"
             self._add_log("protocol", log_line, level="success")
+        elif ev_type == "leader_lost":
+            log_line = f"FAILOVER ALERT: Leader Node {ev.get('former_leader')} is offline! Initiating consensus re-election..."
+            self._add_log("protocol", log_line, level="warn")
+        elif ev_type == "re_election_started":
+            alive_str = ", ".join(f"#{x}" for x in ev.get("alive_nodes", []))
+            log_line = f"RE-ELECTION underway across surviving nodes: [{alive_str}]"
+            self._add_log("protocol", log_line, level="info")
+        elif ev_type == "node_alive":
+            status_str = "REVIVED" if ev.get("alive") else "KILLED (OFFLINE)"
+            log_line = f"CHAOS INJECTION: Node {ev.get('node_id')} {status_str}"
+            self._add_log("chaos", log_line, level="info" if ev.get("alive") else "warn")
+        elif ev_type == "node_battery_depleted":
+            log_line = f"BATTERY DEPLETED: Node #{ev.get('node_id')} reached 0%! Going OFFLINE."
+            self._add_log("chaos", log_line, level="error")
+        elif ev_type == "network_split":
+            log_line = f"PHASE 12: Network split into {len(ev.get('partitions', []))} partitions! Severed links: {ev.get('severed_links')}"
+            self._add_log("protocol", log_line, level="warn")
+        elif ev_type == "network_join":
+            log_line = f"PHASE 13: Bridge links reconnected: {ev.get('reconnected_links')}! Initiating network merge..."
+            self._add_log("protocol", log_line, level="info")
+        elif ev_type == "join_request_initiated":
+            log_line = f"MERGE: Border node #{ev.get('border_node')} detected foreign leader #{ev.get('foreign_leader')}. Emitting JOIN_REQUEST -> Leader #{ev.get('target_leader')}"
+            self._add_log("protocol", log_line, level="info")
+        elif ev_type == "join_request_received_at_leader":
+            log_line = f"MERGE: Leader #{ev.get('leader_id')} received JOIN_REQUEST (count {ev.get('count')}/{ev.get('threshold')})"
+            self._add_log("protocol", log_line, level="warn")
+        elif ev_type == "partition_confirmed":
+            log_line = f"PARTITION: Segment {ev.get('component_nodes')} isolated from leader! Triggering local re-election..."
+            self._add_log("protocol", log_line, level="warn")
+        elif ev_type == "leader_resigned":
+            reason = ev.get("reason", "low_battery")
+            if reason == "network_merge":
+                log_line = f"PHASE 13 RESIGNATION: Leader #{ev.get('former_leader')} stepped down to merge with foreign network (Leader #{ev.get('foreign_leader')})!"
+            else:
+                log_line = f"LEADER HANDOVER: Leader Node #{ev.get('former_leader')} battery critical ({ev.get('battery')}%)! Resigning leadership."
+            self._add_log("protocol", log_line, level="warn")
+        elif ev_type == "battery_drain_config":
+            status_str = "ENABLED" if ev.get("enabled") else "DISABLED"
+            log_line = (f"BATTERY DRAIN: {status_str} at rate {ev.get('rate')}x "
+                        f"(General: {ev.get('node_tx_cost')}%, Leader: {ev.get('leader_tx_cost')}%)")
+            self._add_log("chaos", log_line, level="info")
 
         await self.broadcast("event", ev)
 
@@ -224,12 +278,50 @@ class HavenGuiServer:
             nid = cmd.get("node_id")
             if nid is not None and self.sim_engine:
                 alive = self.sim_engine.toggle_node(nid)
-                self._add_log("chaos", f"Node {nid} {'KILLED' if not alive else 'REVIVED'}", "warn" if not alive else "info")
+                await self.broadcast("status", self.get_status())
         elif action == "set_battery":
             nid, b = cmd.get("node_id"), cmd.get("battery")
             if nid is not None and b is not None and self.sim_engine:
                 self.sim_engine.set_node_battery(nid, b)
                 self._add_log("chaos", f"Node {nid} battery adjusted to {b}%", "info")
+                await self.broadcast("status", self.get_status())
+        elif action == "set_battery_drain":
+            en = cmd.get("enabled")
+            rt = cmd.get("rate")
+            node_tx = cmd.get("node_tx_cost")
+            leader_tx = cmd.get("leader_tx_cost")
+            if self.sim_engine:
+                self.sim_engine.set_battery_drain(en, rt, node_tx, leader_tx)
+                en_str = "ENABLED" if self.sim_engine.battery_drain_enabled else "DISABLED"
+                self._add_log("chaos", f"Dynamic Battery Drain set to {en_str} ({self.sim_engine.battery_drain_rate}x, Node TX: {self.sim_engine.node_tx_cost}%, Leader TX: {self.sim_engine.leader_tx_cost}%)", "info")
+                await self.broadcast("status", self.get_status())
+        elif action == "recharge_all":
+            if self.sim_engine:
+                self.sim_engine.recharge_all_nodes()
+                self._add_log("chaos", "All nodes recharged to 100% capacity", "success")
+                await self.broadcast("status", self.get_status())
+        elif action == "drain_leader":
+            if self.sim_engine:
+                if self.sim_engine.leader is not None:
+                    b = cmd.get("battery", 15)
+                    ldr_id = self.sim_engine.leader
+                    self.sim_engine.set_node_battery(ldr_id, b)
+                    self._add_log("chaos", f"Leader Node {ldr_id} battery drained to {b}%", "warn")
+                    await self.broadcast("status", self.get_status())
+                else:
+                    self._add_log("chaos", "Cannot drain leader: No leader currently elected yet", "warn")
+        elif action == "split_network":
+            if self.sim_engine:
+                cut_links = cmd.get("cut_links")
+                res = self.sim_engine.split_network(cut_links)
+                await self.broadcast("topology", self.get_topology_data())
+                await self.broadcast("status", self.get_status())
+        elif action == "join_networks":
+            if self.sim_engine:
+                bridge_links = cmd.get("bridge_links")
+                res = self.sim_engine.join_networks(bridge_links)
+                await self.broadcast("topology", self.get_topology_data())
+                await self.broadcast("status", self.get_status())
         elif action == "load_preset":
             preset_id = cmd.get("preset")
             await self.load_preset(preset_id)
@@ -396,13 +488,23 @@ class HavenGuiServer:
             is_running = self.cosim_process is not None and self.cosim_process.returncode is None
             engine_status = "RUNNING" if is_running else "IDLE"
 
+        partitions = self.sim_engine.get_active_partitions() if self.sim_engine else []
+        active_leaders = [p["leader"] for p in partitions if p.get("leader") is not None] if partitions else ([self.sim_engine.leader] if self.sim_engine and self.sim_engine.leader else [])
+
         return {
             "mode": self.active_mode,
             "status": engine_status,
             "leader": self.sim_engine.leader if self.sim_engine else None,
+            "leaders": active_leaders,
+            "is_partitioned": len(partitions) > 1,
+            "partitions": partitions,
             "hop": self.sim_engine.hop if self.sim_engine else 0,
             "sim_time_ms": self.sim_engine.sim_time_ms if self.sim_engine else 0,
             "speed": self.sim_engine.speed if self.sim_engine else 1.0,
+            "battery_drain_enabled": self.sim_engine.battery_drain_enabled if self.sim_engine else True,
+            "battery_drain_rate": self.sim_engine.battery_drain_rate if self.sim_engine else 1.0,
+            "node_tx_cost": self.sim_engine.node_tx_cost if self.sim_engine else 0.5,
+            "leader_tx_cost": self.sim_engine.leader_tx_cost if self.sim_engine else 1.5,
             "stats": self.sim_engine.stats if self.sim_engine else {},
             "num_nodes": len(self.current_topology.get("nodes", [])),
             "num_links": len(self.current_topology.get("links", []))
@@ -449,6 +551,13 @@ class HavenGuiServer:
                 "description": "High-degree sensor grid with redundant TurboBlom key spaces",
                 "nodes": 12,
                 "type": "erdos-renyi"
+            },
+            {
+                "id": "dual_ring_split",
+                "name": "Dual Partitioned Rings (8 Nodes, 2 Clusters)",
+                "description": "Two 4-node rings (Network A & B) with bridge links (2,5) & (3,8) ready for Split/Join",
+                "nodes": 8,
+                "type": "dual-ring"
             }
         ]
 
@@ -465,6 +574,46 @@ class HavenGuiServer:
             self.current_topology = generate_topology(num_nodes=8, graph_type="ring", loss_pct=0.0)
         elif preset_id == "dense_12":
             self.current_topology = generate_topology(num_nodes=12, graph_type="erdos-renyi", target_avg_degree=5.0, loss_pct=10.0)
+        elif preset_id == "dual_ring_split":
+            from sim.turboblom import assign_spaces
+            k_master = bytes(range(32))
+            nodes = []
+            batt = [100, 80, 60, 40, 70, 90, 50, 30]
+            coords = [
+                (280, 350), (430, 500), (280, 650), (130, 500),
+                (570, 500), (720, 350), (870, 500), (720, 650)
+            ]
+            for i in range(1, 9):
+                nodes.append({
+                    "id": i,
+                    "battery": batt[i-1],
+                    "spaces": assign_spaces(i, 5, 12, k_master),
+                    "x": coords[i-1][0],
+                    "y": coords[i-1][1]
+                })
+            links = [
+                {"a": 1, "b": 2, "delay_ms": 20, "loss_pct": 0},
+                {"a": 2, "b": 3, "delay_ms": 20, "loss_pct": 0},
+                {"a": 3, "b": 4, "delay_ms": 20, "loss_pct": 0},
+                {"a": 4, "b": 1, "delay_ms": 20, "loss_pct": 0},
+                {"a": 5, "b": 6, "delay_ms": 20, "loss_pct": 0},
+                {"a": 6, "b": 7, "delay_ms": 20, "loss_pct": 0},
+                {"a": 7, "b": 8, "delay_ms": 20, "loss_pct": 0},
+                {"a": 8, "b": 5, "delay_ms": 20, "loss_pct": 0},
+                {"a": 2, "b": 5, "delay_ms": 20, "loss_pct": 0, "disabled": True},
+                {"a": 3, "b": 8, "delay_ms": 20, "loss_pct": 0, "disabled": True},
+            ]
+            self.current_topology = {
+                "meta": {
+                    "m_spaces": 12,
+                    "k_spaces": 5,
+                    "echo_threshold": 2,
+                    "default_bridge_links": [[2, 5], [3, 8]],
+                    "is_partitioned": True
+                },
+                "nodes": nodes,
+                "links": links
+            }
 
         self._init_fast_engine()
         self._add_log("topology", f"Loaded preset: {preset_id}", "info")
@@ -567,13 +716,95 @@ class HavenGuiServer:
             nid = data.get("node_id")
             if nid is not None and self.sim_engine:
                 alive = self.sim_engine.toggle_node(nid)
+                await self.broadcast("status", self.get_status())
                 return web.json_response({"ok": True, "alive": alive})
         elif fault == "battery":
             nid, b = data.get("node_id"), data.get("battery")
             if nid is not None and b is not None and self.sim_engine:
                 self.sim_engine.set_node_battery(nid, b)
+                await self.broadcast("status", self.get_status())
                 return web.json_response({"ok": True, "battery": b})
+        elif fault == "drain_leader":
+            if self.sim_engine:
+                if self.sim_engine.leader is not None:
+                    b = data.get("battery", 15)
+                    ldr_id = self.sim_engine.leader
+                    self.sim_engine.set_node_battery(ldr_id, b)
+                    await self.broadcast("status", self.get_status())
+                    return web.json_response({"ok": True, "leader": ldr_id, "battery": b})
+                else:
+                    return web.json_response({"ok": False, "error": "No leader currently elected yet"}, status=400)
+        elif fault == "recharge":
+            if self.sim_engine:
+                b = data.get("battery", 100.0)
+                self.sim_engine.recharge_all_nodes(b)
+                await self.broadcast("status", self.get_status())
+                return web.json_response({"ok": True, "battery": b})
+        elif fault == "battery_drain":
+            if self.sim_engine:
+                self.sim_engine.set_battery_drain(
+                    data.get("enabled"),
+                    data.get("rate"),
+                    data.get("node_tx_cost"),
+                    data.get("leader_tx_cost")
+                )
+                await self.broadcast("status", self.get_status())
+                return web.json_response({
+                    "ok": True,
+                    "enabled": self.sim_engine.battery_drain_enabled,
+                    "rate": self.sim_engine.battery_drain_rate,
+                    "node_tx_cost": self.sim_engine.node_tx_cost,
+                    "leader_tx_cost": self.sim_engine.leader_tx_cost
+                })
         return web.json_response({"error": "invalid fault"}, status=400)
+
+    async def api_set_battery_drain(self, request: web.Request) -> web.Response:
+        data = await request.json()
+        en = data.get("enabled")
+        rt = data.get("rate")
+        node_tx = data.get("node_tx_cost")
+        leader_tx = data.get("leader_tx_cost")
+        if self.sim_engine:
+            self.sim_engine.set_battery_drain(en, rt, node_tx, leader_tx)
+            await self.broadcast("status", self.get_status())
+            return web.json_response({
+                "ok": True,
+                "enabled": self.sim_engine.battery_drain_enabled,
+                "rate": self.sim_engine.battery_drain_rate,
+                "node_tx_cost": self.sim_engine.node_tx_cost,
+                "leader_tx_cost": self.sim_engine.leader_tx_cost
+            })
+        return web.json_response({"error": "sim_engine_offline"}, status=400)
+
+    async def api_recharge_all(self, request: web.Request) -> web.Response:
+        data = await request.json() if request.can_read_body else {}
+        b = data.get("battery", 100.0)
+        if self.sim_engine:
+            self.sim_engine.recharge_all_nodes(b)
+            await self.broadcast("status", self.get_status())
+            return web.json_response({"ok": True, "battery": b})
+        return web.json_response({"error": "sim_engine_offline"}, status=400)
+
+    async def api_split_network(self, request: web.Request) -> web.Response:
+        data = await request.json() if request.can_read_body else {}
+        cut_links = data.get("cut_links")
+        if self.sim_engine:
+            res = self.sim_engine.split_network(cut_links)
+            await self.broadcast("topology", self.get_topology_data())
+            await self.broadcast("status", self.get_status())
+            return web.json_response({"ok": True, "result": res})
+        return web.json_response({"error": "sim_engine_offline"}, status=400)
+
+    async def api_join_networks(self, request: web.Request) -> web.Response:
+        data = await request.json() if request.can_read_body else {}
+        bridge_links = data.get("bridge_links")
+        if self.sim_engine:
+            res = self.sim_engine.join_networks(bridge_links)
+            await self.broadcast("topology", self.get_topology_data())
+            await self.broadcast("status", self.get_status())
+            return web.json_response({"ok": True, "result": res})
+        return web.json_response({"error": "sim_engine_offline"}, status=400)
+
 
     async def api_get_logs(self, request: web.Request) -> web.Response:
         node_id = request.query.get("node")

@@ -36,8 +36,15 @@ class NetworkGraph {
       claiming: '#a855f7',
       leader: '#10b981',
       drop: '#f43f5e',
+      joinRequest: '#ec4899',
+      join_request: '#ec4899',
+      resignation: '#f97316',
+      findLeader: '#818cf8',
+      find_leader: '#818cf8',
+      leaderAck: '#38bdf8',
+      leader_ack: '#38bdf8',
       linkActive: 'rgba(148, 163, 184, 0.22)',
-      linkDisabled: 'rgba(244, 63, 94, 0.4)'
+      linkDisabled: 'rgba(244, 63, 94, 0.65)'
     };
 
     this._setupCanvas();
@@ -89,7 +96,8 @@ class NetworkGraph {
         leader_id: nd.leader_id || null,
         alive: nd.alive !== undefined ? nd.alive : true,
         radius: 28,
-        neighbours: nd.neighbours || []
+        neighbours: nd.neighbours || [],
+        partition: nd.partition || null
       });
     });
 
@@ -151,6 +159,10 @@ class NetworkGraph {
       if (type === 'ELECTION') color = this.colors.election;
       else if (type === 'CLAIM') color = this.colors.claiming;
       else if (type === 'HEARTBEAT') color = this.colors.leader;
+      else if (type === 'JOIN_REQUEST') color = this.colors.joinRequest;
+      else if (type === 'RESIGNATION') color = this.colors.resignation;
+      else if (type === 'FIND_LEADER') color = this.colors.findLeader;
+      else if (type === 'LEADER_ACK') color = this.colors.leaderAck;
 
       this.packets.push({
         id: Math.random(),
@@ -359,9 +371,10 @@ class NetworkGraph {
       ctx.moveTo(na.x, na.y);
       ctx.lineTo(nb.x, nb.y);
 
-      if (lk.disabled) {
-        ctx.strokeStyle = this.colors.linkDisabled;
-        ctx.lineWidth = 2.5;
+      const isDeadLink = !na.alive || !nb.alive;
+      if (lk.disabled || isDeadLink) {
+        ctx.strokeStyle = isDeadLink ? 'rgba(239, 68, 68, 0.35)' : this.colors.linkDisabled;
+        ctx.lineWidth = isDeadLink ? 1.5 : 2.5;
         ctx.setLineDash([5, 5]);
       } else {
         ctx.strokeStyle = this.colors.linkActive;
@@ -370,6 +383,27 @@ class NetworkGraph {
       }
       ctx.stroke();
       ctx.setLineDash([]);
+
+      // Distinct severed / cut indicator badge at midpoint
+      if (lk.disabled && !isDeadLink) {
+        const mx = (na.x + nb.x) / 2;
+        const my = (na.y + nb.y) / 2;
+        ctx.save();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        ctx.beginPath();
+        ctx.arc(mx, my, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#f43f5e';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#f43f5e';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('✂', mx, my);
+        ctx.restore();
+      }
 
       // Subtle latency badge at link center if hovered
       if (this.hoveredNode && (this.hoveredNode.id === lk.a || this.hoveredNode.id === lk.b)) {
@@ -545,24 +579,30 @@ class NetworkGraph {
 
       // 6. Node ID & Crown / Death Icon
       ctx.save();
-      ctx.fillStyle = nd.alive ? '#f8fafc' : '#94a3b8';
       ctx.font = 'bold 13px Outfit, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      if (nd.mode === 'LEADER') {
+      if (!nd.alive) {
+        ctx.fillStyle = '#f43f5e';
+        ctx.fillText(`✕ ${nd.id}`, nd.x, nd.y - 2);
+      } else if (nd.mode === 'LEADER') {
+        ctx.fillStyle = '#f8fafc';
         ctx.fillText(`👑 ${nd.id}`, nd.x, nd.y - 2);
-      } else if (!nd.alive) {
-        ctx.fillText(`✕ ${nd.id}`, nd.x, nd.y);
       } else {
+        ctx.fillStyle = '#f8fafc';
         ctx.fillText(`${nd.id}`, nd.x, nd.y - 2);
       }
 
       // Small battery text under ID
       if (nd.alive) {
-        ctx.font = '9px JetBrains Mono';
-        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'bold 9px JetBrains Mono';
+        ctx.fillStyle = nd.battery > 50 ? '#34d399' : nd.battery > 20 ? '#fbbf24' : '#f87171';
         ctx.fillText(`${nd.battery}%`, nd.x, nd.y + 11);
+      } else {
+        ctx.font = 'bold 8px JetBrains Mono';
+        ctx.fillStyle = '#f43f5e';
+        ctx.fillText('DEAD', nd.x, nd.y + 11);
       }
       ctx.restore();
 
@@ -570,9 +610,19 @@ class NetworkGraph {
       ctx.save();
       ctx.font = '10px JetBrains Mono';
       ctx.textAlign = 'center';
-      ctx.fillStyle = modeColor;
+      ctx.fillStyle = nd.alive ? modeColor : '#f43f5e';
       ctx.fillText(nd.alive ? nd.mode : 'OFFLINE', nd.x, nd.y + nd.radius + 15);
       ctx.restore();
+
+      // 8. Partition Tag if partitioned
+      if (nd.alive && nd.partition) {
+        ctx.save();
+        ctx.font = 'bold 9px JetBrains Mono';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = nd.partition === 'A' ? '#38bdf8' : '#fb923c';
+        ctx.fillText(`Net ${nd.partition}`, nd.x, nd.y - nd.radius - 8);
+        ctx.restore();
+      }
     });
   }
 }
