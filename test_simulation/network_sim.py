@@ -3,10 +3,19 @@ import networkx as nx
 import numpy as np
 import hashlib
 import hmac
+import sys
+from pathlib import Path
+
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 try:
-    from sim.turboblom import assign_spaces
+    from test_simulation.turboblom import assign_spaces
 except ModuleNotFoundError:
-    from turboblom import assign_spaces
+    try:
+        from sim.turboblom import assign_spaces
+    except ModuleNotFoundError:
+        from turboblom import assign_spaces
 
 # Parameters
 N_NODES = 50

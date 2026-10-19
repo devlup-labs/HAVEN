@@ -185,9 +185,9 @@ class Node:
 # ---------------------------------------------------------------------- main
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--topology", default="topology.json", help="path to topology.json")
+    root = Path(__file__).resolve().parents[1]
+    default_topo = str(root / "configs" / "topology_10node_ring.json") if (root / "configs" / "topology_10node_ring.json").exists() else "topology.json"
+    parser.add_argument("--topology", default=default_topo, help="path to topology.json")
     parser.add_argument("--zmq-endpoint", default="ipc:///tmp/haven_zmq.sock", help="ZMQ socket endpoint")
     parser.add_argument("--pty-pattern", default="/tmp/haven_uart_{id}", help="PTY path pattern")
     parser.add_argument("--pty-timeout", type=int, default=30, help="seconds to wait for PTYs")
@@ -202,6 +202,8 @@ def main():
     args = parser.parse_args()
 
     topo_path = Path(args.topology)
+    if not topo_path.is_file() and (root / args.topology).is_file():
+        topo_path = root / args.topology
     if not topo_path.is_file():
         sys.exit(f"error: topology file not found: {topo_path}")
 

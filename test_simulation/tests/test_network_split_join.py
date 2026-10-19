@@ -5,12 +5,22 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[2]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+if str(ROOT_DIR / "test_simulation") not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR / "test_simulation"))
 if str(ROOT_DIR / "sim") not in sys.path:
     sys.path.insert(0, str(ROOT_DIR / "sim"))
 
 from gui.haven_sim_engine import HavenSimEngine
-from sim.gen_topology import generate_topology
-from sim.turboblom import assign_spaces
+try:
+    from test_simulation.gen_topology import generate_topology
+    from test_simulation.turboblom import assign_spaces
+except ModuleNotFoundError:
+    try:
+        from sim.gen_topology import generate_topology
+        from sim.turboblom import assign_spaces
+    except ModuleNotFoundError:
+        from gen_topology import generate_topology
+        from turboblom import assign_spaces
 
 K_MASTER = bytes(range(32))
 
@@ -207,6 +217,7 @@ def test_rest_api_split_and_join():
     async def _test():
         server = HavenGuiServer(host="127.0.0.1", port=0)
         await server.load_preset("mesh_10")
+        server.sim_engine.battery_drain_enabled = False
         server.sim_engine.start_sim()
 
         # Step until initial leader

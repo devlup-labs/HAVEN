@@ -28,11 +28,19 @@ from aiohttp import web, WSMsgType
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+if str(ROOT_DIR / "test_simulation") not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR / "test_simulation"))
 if str(ROOT_DIR / "sim") not in sys.path:
     sys.path.insert(0, str(ROOT_DIR / "sim"))
 
 from gui.haven_sim_engine import HavenSimEngine
-from sim.gen_topology import generate_topology
+try:
+    from test_simulation.gen_topology import generate_topology
+except ModuleNotFoundError:
+    try:
+        from sim.gen_topology import generate_topology
+    except ModuleNotFoundError:
+        from gen_topology import generate_topology
 
 logging.basicConfig(level=logging.INFO, format="[HAVEN GUI %(asctime)s] %(message)s")
 logger = logging.getLogger("haven_gui")
@@ -61,13 +69,15 @@ class HavenGuiServer:
         self._setup_routes()
 
     def _load_initial_topology(self):
-        topo_path = ROOT_DIR / "topology.json"
+        topo_path = ROOT_DIR / "configs" / "topology_10node_ring.json"
+        if not topo_path.is_file():
+            topo_path = ROOT_DIR / "topology.json"
         if topo_path.is_file():
             try:
                 self.current_topology = json.loads(topo_path.read_text())
-                logger.info(f"Loaded default topology: {len(self.current_topology.get('nodes', []))} nodes")
+                logger.info(f"Loaded default topology ({topo_path.name}): {len(self.current_topology.get('nodes', []))} nodes")
             except Exception as e:
-                logger.error(f"Failed to load topology.json: {e}")
+                logger.error(f"Failed to load topology from {topo_path}: {e}")
         if not self.current_topology:
             self.current_topology = generate_topology(
                 num_nodes=3,
@@ -372,7 +382,7 @@ class HavenGuiServer:
         # Run start_haven.sh
         cmd = [
             "/bin/bash",
-            str(ROOT_DIR / "start_haven.sh"),
+            str(ROOT_DIR / "scripts" / "start_haven.sh") if (ROOT_DIR / "scripts" / "start_haven.sh").exists() else str(ROOT_DIR / "start_haven.sh"),
             "--topology", str(active_topo_path),
             "--verbose"
         ]
@@ -563,7 +573,9 @@ class HavenGuiServer:
 
     async def load_preset(self, preset_id: str):
         if preset_id == "mesh_10":
-            topo_path = ROOT_DIR / "topology.json"
+            topo_path = ROOT_DIR / "configs" / "topology_10node_ring.json"
+            if not topo_path.is_file():
+                topo_path = ROOT_DIR / "topology.json"
             if topo_path.is_file():
                 self.current_topology = json.loads(topo_path.read_text())
         elif preset_id == "ring_3":
@@ -575,7 +587,13 @@ class HavenGuiServer:
         elif preset_id == "dense_12":
             self.current_topology = generate_topology(num_nodes=12, graph_type="erdos-renyi", target_avg_degree=5.0, loss_pct=10.0)
         elif preset_id == "dual_ring_split":
-            from sim.turboblom import assign_spaces
+            try:
+                from test_simulation.turboblom import assign_spaces
+            except ModuleNotFoundError:
+                try:
+                    from sim.turboblom import assign_spaces
+                except ModuleNotFoundError:
+                    from turboblom import assign_spaces
             k_master = bytes(range(32))
             nodes = []
             batt = [100, 80, 60, 40, 70, 90, 50, 30]

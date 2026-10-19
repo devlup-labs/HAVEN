@@ -119,7 +119,11 @@ def validate(order, k, m, k_master, verbose=False):
     partitioned ring rather than an error. Catching it here turns a confusing
     test failure into a clear message.
     """
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sim"))
+    root_dir = Path(__file__).resolve().parents[1]
+    if str(root_dir / "test_simulation") not in sys.path:
+        sys.path.insert(0, str(root_dir / "test_simulation"))
+    if str(root_dir / "sim") not in sys.path:
+        sys.path.insert(0, str(root_dir / "sim"))
     from turboblom import assign_spaces, compute_K_AB, generate_key_matrix
 
     n = len(order)
@@ -264,7 +268,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     root = Path(__file__).resolve().parents[1]
-    ap.add_argument("--config", default=str(root / "haven_ring.conf"))
+    default_cfg = root / "configs" / "default_ring.conf" if (root / "configs" / "default_ring.conf").exists() else root / "haven_ring.conf"
+    ap.add_argument("--config", default=str(default_cfg))
     ap.add_argument("--verbose", action="store_true",
                     help="log every frame, not just lifecycle events")
     ap.add_argument("--quiet", action="store_true", help="suppress frame logging")

@@ -27,12 +27,17 @@ HAVEN/
 │   ├── include/       # Header files
 │   ├── build/         # CMake build output (gitignored)
 │   └── CMakeLists.txt
-├── sim/               # Python simulation
+├── test_simulation/   # Python protocol simulation & test suites
 │   ├── turboblom.py   # TurboBlom reference implementation
 │   ├── network_sim.py # NetworkX topology simulation
-│   ├── tests/         # Test vectors and pytest suites
-│   └── .venv/         # Python virtual environment (gitignored)
-├── docs/              # Protocol design documents
+│   ├── gen_topology.py# Deterministic topology generator
+│   └── tests/         # Unit and integration pytest suites
+├── bridge/            # Virtual radio switches & UART-ZMQ co-simulation bridge
+├── configs/           # Network topologies and ring configurations
+├── scripts/           # Execution launchers (start_haven.sh, start_gui.sh)
+├── gui/               # Interactive Web GUI Visualizer Studio
+├── docs/              # Protocol specifications & architecture runbooks
+├── requirements.txt   # Python dependencies
 └── README.md
 ```
 
@@ -87,15 +92,14 @@ python3 --version
 ### Python Environment
 
 ```bash
-cd sim/
 python3 -m venv .venv
 source .venv/bin/activate
-pip install networkx pytest
+pip install -r requirements.txt
 ```
 
-Activate the venv every time you work on simulation code:
+Activate the venv whenever working on HAVEN:
 ```bash
-source sim/.venv/bin/activate
+source .venv/bin/activate
 ```
 
 ### Verify ARM Cross-Compilation Works
@@ -144,7 +148,7 @@ To exit QEMU: `Ctrl+A` then `X`.
 
 ### Launch Interactive Web GUI Visualizer
 ```bash
-./start_gui.sh
+./scripts/start_gui.sh
 # Open http://localhost:8080 in your browser
 ```
 Features:
@@ -156,10 +160,9 @@ Features:
 ### CLI Simulation & Tests
 ```bash
 source .venv/bin/activate
-python3 sim/turboblom.py        # TurboBlom reference + self-test
-python3 sim/network_sim.py      # NetworkX topology simulation
-export PYTHONPATH=.
-pytest sim/tests/               # Full test suite
+python3 test_simulation/turboblom.py        # TurboBlom reference + self-test
+python3 test_simulation/network_sim.py      # NetworkX topology simulation
+pytest                                      # Full test suite
 ```
 
 ## Protocol Overview

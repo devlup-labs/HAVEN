@@ -34,11 +34,13 @@ from typing import Dict, List, Set, Tuple, Optional, Callable, Any
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+if str(ROOT_DIR / "test_simulation") not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR / "test_simulation"))
 if str(ROOT_DIR / "sim") not in sys.path:
     sys.path.insert(0, str(ROOT_DIR / "sim"))
 
 try:
-    from sim.turboblom import assign_spaces, compute_K_AB, generate_key_matrix
+    from test_simulation.turboblom import assign_spaces, compute_K_AB, generate_key_matrix
 except ImportError:
     try:
         from turboblom import assign_spaces, compute_K_AB, generate_key_matrix

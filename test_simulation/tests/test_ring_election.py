@@ -18,9 +18,12 @@ from collections import deque
 import pytest
 
 try:
-    from sim.turboblom import assign_spaces
+    from test_simulation.turboblom import assign_spaces
 except ModuleNotFoundError:
-    from turboblom import assign_spaces
+    try:
+        from sim.turboblom import assign_spaces
+    except ModuleNotFoundError:
+        from turboblom import assign_spaces
 
 K_MASTER = bytes(range(32))
 MAX_ADJ = 2            # firmware: HAVEN_MAX_ADJ_NODES

@@ -3,13 +3,13 @@
 # HAVEN Co-Simulation Studio & Visualizer Launcher
 #
 # Usage:
-#   ./start_gui.sh            # Run on default port 8080
-#   ./start_gui.sh --port 3000 # Run on custom port
+#   ./scripts/start_gui.sh             # Run on default port 8080
+#   ./scripts/start_gui.sh --port 3000 # Run on custom port
 #
 
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 PORT=8080
@@ -25,11 +25,11 @@ done
 PYTHON_BIN="python3"
 if [[ -x "$PROJECT_ROOT/.venv/bin/python3" ]]; then
     PYTHON_BIN="$PROJECT_ROOT/.venv/bin/python3"
-elif [[ -x "$PROJECT_ROOT/sim/.venv/bin/python3" ]]; then
-    PYTHON_BIN="$PROJECT_ROOT/sim/.venv/bin/python3"
+elif [[ -x "$PROJECT_ROOT/test_simulation/.venv/bin/python3" ]]; then
+    PYTHON_BIN="$PROJECT_ROOT/test_simulation/.venv/bin/python3"
 fi
 
-export PYTHONPATH="$PROJECT_ROOT:$PROJECT_ROOT/sim:$PROJECT_ROOT/bridge:${PYTHONPATH:-}"
+export PYTHONPATH="$PROJECT_ROOT:$PROJECT_ROOT/test_simulation:$PROJECT_ROOT/bridge:${PYTHONPATH:-}"
 
 echo "=========================================================="
 echo "    🛡️ HAVEN Co-Simulation Visualizer & Control Studio"

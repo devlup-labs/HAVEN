@@ -155,7 +155,8 @@ def test_config_strips_quotes_and_comments(tmp_path):
 def test_shipped_config_is_self_consistent():
     """The committed config must describe a ring that can actually form."""
     root = Path(__file__).resolve().parents[2]
-    cfg = ring_switch.load_config(root / "haven_ring.conf")
+    cfg_path = root / "configs" / "default_ring.conf" if (root / "configs" / "default_ring.conf").exists() else root / "haven_ring.conf"
+    cfg = ring_switch.load_config(cfg_path)
     n = int(cfg["NUM_NODES"])
     order = ring_switch.parse_ring_order(cfg["RING_ORDER"])[:n]
     assert len(order) == n, "RING_ORDER must supply at least NUM_NODES entries"

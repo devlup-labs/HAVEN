@@ -13,8 +13,16 @@ import json
 from pathlib import Path
 import pytest
 
-from sim.gen_topology import generate_topology, is_connected
-from sim.turboblom import assign_spaces
+try:
+    from test_simulation.gen_topology import generate_topology, is_connected
+    from test_simulation.turboblom import assign_spaces
+except ModuleNotFoundError:
+    try:
+        from sim.gen_topology import generate_topology, is_connected
+        from sim.turboblom import assign_spaces
+    except ModuleNotFoundError:
+        from gen_topology import generate_topology, is_connected
+        from turboblom import assign_spaces
 
 
 def test_topology_deterministic():
