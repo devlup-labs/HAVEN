@@ -34,7 +34,6 @@ Designed specifically for resource-constrained embedded targets (such as ARM Cor
 8. [Documentation Guide (`docs/`)](#documentation-guide-docs)
 9. [Key Protocol Parameters & Threat Model](#key-protocol-parameters--threat-model)
 10. [Troubleshooting & Common Pitfalls](#troubleshooting--common-pitfalls)
-11. [Contributing & Research Credits](#contributing--research-credits)
 
 ---
 
@@ -401,26 +400,3 @@ For in-depth research, formal proofs, and technical specifications, please consu
 | Lingering PTYs or sockets after crash | Previous run killed forcefully without cleanup trap | Run: `rm -f /tmp/haven_uart_* /tmp/haven_zmq.sock /tmp/haven_events.jsonl` |
 
 ---
-
-## Contributing & Research Credits
-
-HAVEN is an open research project developed under **[DevLUp Labs](https://github.com/devlup-labs)**.
-
-- **Foundational Research**:
-  - Karlof & Wagner (2003) — *Secure Routing in Wireless Sensor Networks*
-  - Zhao, Yağan, Gligor (2019) — *Connectivity in Random Key Graphs With Unreliable Links*
-  - Blin & Tixeuil (2020) — *Compact Self-Stabilizing Leader Election for Arbitrary Graphs*
-- **Contributions**: Pull requests are welcome! Please make sure that any functional protocol changes pass the test suite (`pytest`) and adhere to the zero-dynamic-allocation rule for `firmware/`.
-- **License**: Released under the MIT License.
-
-## Contributing & Research Credits
-
-HAVEN is an open research project developed under **[DevLUp Labs](https://github.com/devlup-labs)**.
-
-- **Foundational Research**:
-  - Karlof & Wagner (2003) — *Secure Routing in Wireless Sensor Networks*
-  - Zhao, Yağan, Gligor (2019) — *Connectivity in Random Key Graphs With Unreliable Links*
-  - Blin & Tixeuil (2020) — *Compact Self-Stabilizing Leader Election for Arbitrary Graphs*
-- **Contributions**: Pull requests are welcome! Please make sure that any functional protocol changes pass the test suite (`pytest`) and adhere to the zero-dynamic-allocation rule for `firmware/`.
-- **License**: Released under the MIT License.
-
