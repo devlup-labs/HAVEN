@@ -1,282 +1,433 @@
-// \============================================================  
-// HAVEN — Leader Election Protocol (Full Pseudocode)  
-// \============================================================
+# HAVEN: Leader Election Protocol Specification & Pseudocode
+**Unified Master Pseudocode: Core Max-Consensus & Extended Fault Handling (Phases 1–14)**
 
-// \---------------- CONSTANTS \----------------  
-ECHO\_THRESHOLD   \= \<tuned via simulation\>  
-T\_claim          \= \<safety timeout before claimant broadcast\>  
-T\_window         \= \<claim window for objections\>  
-REPLAY\_WINDOW    \= 10   // seconds, \+/- tolerance on packet timestamps  
-HEARTBEAT\_PERIOD \= \<per epoch tick\>
+---
 
-// \---------------- STATE (per node) \----------------  
-self.id  
-self.mode              \= DISCOVERY     
-// DISCOVERY | ELECTION | PASSTHROUGH | CLAIMING | LEADER  
-self.internal\_score  
-self.neighbour\_list     \= \[\]          // populated in phase 2  
-self.neighbour\_table     \= {} // node\_id \-\> { auth\_status, countdown\_timer, penalty\_count, K\_AB }  
-self.best\_known\_score  
-self.best\_known\_origin  
-self.echo\_count         \= 0  
-self.timeout\_started    \= false  
-self.epoch\_counter      \= load\_from\_EEPROM()   // section 4.5  
-self.leader\_id          \= null
+## 1. Protocol Parameters & State Model
 
-// \============================================================  
-// PHASE 1 — NEIGHBOUR DISCOVERY / KEY DERIVATION  
-// \============================================================  
-1\. BROADCAST discovery\_packet to all adjacent nodes:  
-       { node\_id: self.id, turboblom\_spaces: self.space\_list, time: now(), hash }
+### 1.1 Constants & Compile-Time Tunables
+```python
+ECHO_THRESHOLD          = 2       # Number of returned candidate echos required before claim
+T_CLAIM_MS              = 5000    # Safety timeout after resonance before broadcasting claim
+T_WINDOW_MS             = 5000    # Claim window for objection collection and vote locking
+REPLAY_WINDOW_S         = 10      # Tolerance window (+/- seconds) for packet timestamp freshness
+HEARTBEAT_PERIOD_MS     = 1000    # Periodic beacon interval for active leader
+SESSION_TTL_S           = 30      # Neighbor link authentication lifetime before re-keying
+MAX_ADJ_NODES           = 8       # Maximum physical neighbors supported per node
+M_SPACES                = 12      # Total TurboBlom key spaces available in network
+K_SPACES                = 5       # Key spaces assigned per node (ensures ~99% pairwise linkability)
+```
 
-2\. LISTEN for x seconds, where x is randomised per node (5 \< x \< 6\)  
-       // random per-node duration avoids synchronized collision storms  
-   for every received discovery\_packet:  
-       if |packet.time \- now()| \> REPLAY\_WINDOW:  
-           drop packet   // stale or replayed  
-       else:  
-           verify hash  
-           if invalid: drop packet  
-           else:  
-               shared\_spaces \= self.space\_list ∩ packet.turboblom\_spaces  
-               if shared\_spaces is empty:  
-                   drop   // no basis for a pairwise key (section 2.3)  
-               else:  
-                   K\_AB \= derive\_turboblom\_key(self.id, packet.node\_id, shared\_spaces, K\_master)  
-                       // idlow/idhigh sort, HMAC-SHA256 per shared space, XOR-accumulate (section 2.3)  
-                   add packet.node\_id to self.neighbour\_list  
-                   self.neighbour\_table\[packet.node\_id\] \= {  
-                       auth\_status: AUTHENTICATED,  
-                       countdown\_timer: SESSION\_TTL,  
-                       penalty\_count: 0,  
-                       K\_AB: K\_AB  
-                   }
+### 1.2 Per-Node Persistent & Volatile State
+```python
+# Identity & Hardware Attributes
+self.id                 : uint8_t         # Node unique hardware identifier (1..255)
+self.battery_pct        : uint8_t         # Remaining battery percentage (0..100)
+self.space_list         : list[uint8_t]   # k TurboBlom key space IDs assigned offline
+self.k_master           : bytes[32]       # Network-wide secret deployment key
 
-// \============================================================  
-// PHASE 2 — SCORE COMPUTATION AND MODE DECISION  
-// \============================================================  
-3\. self.internal\_score \= battery\_pct \+ len(self.neighbour\_list)   // keep as int for packet field
+# Protocol Operational Mode
+self.mode               : enum            # DISCOVERY | ELECTION | PASSTHROUGH | CLAIMING | LEADER
+self.internal_score     : uint16_t        # Locally evaluated election fitness score
+self.epoch_counter      : uint32_t        # Monotonic epoch counter (persisted to EEPROM)
+self.leader_id          : uint8_t         # Current recognized leader ID (0xFF if unset)
 
-   odds \= max(1, ( l\*(battery\_pct/100) \+ m\*(len(neighbour\_list)/MAX\_ADJ\_NODES) ) / 2\)  
-       // l, m are weighting constants
+# Consensus & Tracking Variables
+self.best_known_score   : uint16_t        # Highest authenticated candidate score observed
+self.best_known_origin  : uint8_t         # Origin node ID corresponding to best_known_score
+self.echo_count         : uint8_t         # Resonant echos returned to candidate origin
+self.timeout_started    : bool            # True if T_claim timer is actively running
+self.vote_locked        : bool            # True if local vote locked for a claimant
+self.vote_origin        : uint8_t         # Candidate ID for which local vote is committed
 
-   seed \= initial\_random\_seed()  
-   prng \= (a\*seed \+ b) mod m\_prng  
-   seed \= prng  
-   prob \= prng / m\_prng
+# Neighbor Table & Cryptographic Links
+self.neighbour_list     : list[uint8_t]   # List of discovered, authenticated physical neighbors
+self.neighbour_table    : dict[uint8_t -> NeighborEntry]
+# NeighborEntry fields:
+#   - auth_status       : UNVERIFIED | AUTHENTICATED | SUSPECT
+#   - countdown_timer   : int (seconds remaining until session expiry)
+#   - penalty_count     : int (malicious/malformed frame counter)
+#   - K_AB              : bytes[16] (pairwise link key derived via TurboBlom)
+```
 
-   if odds \> prob:  
-       self.mode \= ELECTION  
-   else:  
-       self.mode \= PASSTHROUGH
+---
 
-// \============================================================  
-// PHASE 3 — ELECTION MODE  
-// \============================================================  
-4\. if self.mode \== ELECTION:  
-       election\_packet \= {  
-           score: self.internal\_score,  
-           origin\_id: self.id,  
-           hmac\_score: hmac(K\_origin\_broadcast, score),  
-           replayer\_id: self.id,  
-           time: now(),  
-           hmac\_replay: hmac(K\_link, replayer\_id ∥ time)  
-       }  
-       broadcast election\_packet to ring neighbours (left \+ right)
+## PART I: Core Election State Machine (Phases 1–9)
+*Implemented in bare-metal embedded C (`firmware/src/haven.c`).*
 
-       self.best\_known\_score  \= self.internal\_score  
-       self.best\_known\_origin \= self.id  
-       self.echo\_count        \= 0  
-       self.timeout\_started   \= false
+### Phase 1: Neighbour Discovery & Pairwise Key Derivation
+```python
+# 1. Broadcast Discovery Frame at boot
+discovery_packet = {
+    type        : MSG_DISCOVERY,
+    origin_id   : self.id,
+    spaces      : self.space_list,
+    time        : current_time_ms(),
+    hmac        : HMAC_SHA256(self.k_master, "DISC" || self.id || spaces || time)[:16]
+}
+broadcast(discovery_packet, destination=BROADCAST_ID)
 
-// \============================================================  
-// PHASE 4 — PACKET RECEPTION (election & passthrough nodes)  
-// \============================================================  
-5\. ON RECEIVE election\_packet:  
-       if |packet.time \- now()| \> REPLAY\_WINDOW:  
-           drop  
-       if not verify\_hmac(packet, K\_link\_with\_sender):  
-           drop
+# 2. Ingest discovery responses during boot window (randomized 5.0s to 6.0s)
+ON RECEIVE discovery_packet FROM sender:
+    if abs(discovery_packet.time - current_time_ms()) > REPLAY_WINDOW_S * 1000:
+        drop packet  # Replay/stale frame rejected
 
-       if packet.origin\_id \== self.id:  
-           // own candidacy propagated around the ring and returned  
-           self.echo\_count \+= 1  
-           if self.echo\_count \>= ECHO\_THRESHOLD and not self.timeout\_started:  
-               start\_timer(T\_claim)  
-               self.timeout\_started \= true  
-           drop packet   // do not re-circulate own echo
+    if not verify_hmac(discovery_packet.hmac, self.k_master):
+        drop packet  # Unauthenticated origin rejected
 
-       else if packet.score \> self.best\_known\_score  
-             or (packet.score \== self.best\_known\_score and packet.origin\_id \> self.best\_known\_origin):  
-           // deterministic tie-break on origin\_id  
-           self.best\_known\_score  \= packet.score  
-           self.best\_known\_origin \= packet.origin\_id  
-           self.echo\_count        \= 0  
-           self.timeout\_started   \= false
+    # Find overlapping TurboBlom key spaces
+    shared_spaces = set(self.space_list) & set(discovery_packet.spaces)
+    if not shared_spaces:
+        drop packet  # Cannot form physical link without shared cryptographic space
 
-           forward\_packet \= { ...packet, replayer\_id: self.id, time: now(), hmac\_replay: recompute }  
-           broadcast forward\_packet to ring neighbours, excluding sender
+    # Derive 16-byte pairwise symmetric link key K_AB
+    K_AB = derive_turboblom_key(self.id, discovery_packet.origin_id, shared_spaces, self.k_master)
+    
+    self.neighbour_list.append(discovery_packet.origin_id)
+    self.neighbour_table[discovery_packet.origin_id] = NeighborEntry(
+        auth_status     = AUTHENTICATED,
+        countdown_timer = SESSION_TTL_S,
+        penalty_count   = 0,
+        K_AB            = K_AB
+    )
+```
 
-           if self.mode \== ELECTION:  
-               self.mode \= PASSTHROUGH   // yield to stronger candidate
+### Phase 2: Fitness Score Computation & Mode Decision
+```python
+# Calculate fitness score: battery reserve + network connectivity
+self.internal_score = self.battery_pct + len(self.neighbour_list)
 
-       else:  
-           drop packet   // lower-priority / redundant, suppressed (per section 3.1)
+# Evaluate probabilistic contention threshold
+# Weighting parameters: l = battery weight, m = connectivity weight
+weighted_ratio = ( (self.battery_pct / 100.0) + (len(self.neighbour_list) / MAX_ADJ_NODES) ) / 2.0
+odds = max(1, int(weighted_ratio * 1000))  # Scale to per-mille (1..1000)
 
-// \============================================================  
-// PHASE 5 — TIMEOUT / CLAIMANT BROADCAST  
-// \============================================================  
-6\. ON TIMER T\_claim EXPIRY:  
-       if self.best\_known\_origin \!= self.id:  
-           self.mode \= PASSTHROUGH  
-           return  
-       else:  
-           goto PHASE 6
+# Pseudorandom roll to prevent synchronized flood storms
+random_roll = hardware_prng() % 1000
 
-// \============================================================  
-// PHASE 6 — CLAIMANT BROADCAST  
-// \============================================================  
-7\. claimant\_packet \= {  
-       origin\_id: self.id,  
-       score: self.internal\_score,  
-       hmac\_score: hmac(...),  
-       claim\_time: now(),  
-       hmac\_claim\_time: hmac(...)  
-   }  
-   broadcast claimant\_packet to ring neighbours  
-   start\_timer(T\_window)  
-   self.mode \= CLAIMING
+if odds > random_roll:
+    self.mode = ELECTION      # Contend for network leadership
+else:
+    self.mode = PASSTHROUGH   # Act as voter and relay
+```
 
-// \============================================================  
-// PHASE 7 — CLAIMANT RECEPTION / OBJECTION (any node)  
-// \============================================================  
-8\. ON RECEIVE claimant\_packet:  
-       verify hmac's and claim\_time freshness; drop if invalid
+### Phase 3: Election Candidacy Broadcast
+```python
+if self.mode == ELECTION:
+    self.best_known_score  = self.internal_score
+    self.best_known_origin = self.id
+    self.echo_count        = 0
+    self.timeout_started   = false
 
-       if self.internal\_score \> packet.score  
-          or (self.best\_known\_score \> packet.score and self.best\_known\_origin \!= packet.origin\_id):  
-           // a higher-scoring candidate exists locally or is known but hasn't finished propagating  
-           objection\_packet \= {  
-               objector\_id: self.id,  
-               higher\_score: max(self.internal\_score, self.best\_known\_score),  
-               higher\_origin: \<corresponding origin\_id\>,  
-               time: now(),  
-               hmac  
-           }  
-           send objection\_packet back toward claimant (reverse ring path)
+    # Broadcast candidate claim to all authenticated neighbors
+    for neighbor_id in self.neighbour_list:
+        election_packet = {
+            type            : MSG_ELECTION,
+            score           : self.internal_score,
+            origin_id       : self.id,
+            origin_tag      : HMAC_SHA256(self.k_master, self.internal_score || self.id)[:16],
+            replayer_id     : self.id,
+            timestamp       : current_time_ms(),
+            link_tag        : HMAC_SHA256(self.neighbour_table[neighbor_id].K_AB, 
+                                          replayer_id || timestamp)[:16]
+        }
+        send(election_packet, destination=neighbor_id)
+```
 
-       else:  
-           forward claimant\_packet onward (ring propagation, excluding sender)  
-           lock local vote for origin\_id \= packet.origin\_id until T\_window expires
+### Phase 4: Priority-Pruned Flooding & Echo Resonance Counting
+```python
+ON RECEIVE election_packet FROM neighbor_id:
+    # 1. Verify link authentication
+    if not verify_hmac(election_packet.link_tag, self.neighbour_table[neighbor_id].K_AB):
+        drop packet
+    if abs(election_packet.timestamp - current_time_ms()) > REPLAY_WINDOW_S * 1000:
+        drop packet
 
-// \============================================================  
-// PHASE 8 — CONSENSUS FINALIZATION (at claimant node)  
-// \============================================================  
-9\. ON RECEIVE objection\_packet (while T\_window active):  
-       verify hmac \+ freshness; drop if invalid  
-       if packet.higher\_score \> self.internal\_score:  
-           cancel\_timer(T\_window)  
-           self.best\_known\_score  \= packet.higher\_score  
-           self.best\_known\_origin \= packet.higher\_origin  
-           self.mode \= PASSTHROUGH  
-           // abort claim; higher candidate will run its own claim cycle
+    # 2. Case A: Own candidate message has returned (Resonant Echo)
+    if election_packet.origin_id == self.id:
+        self.echo_count += 1
+        # Once resonance threshold is reached, arm claim timer
+        if self.echo_count >= ECHO_THRESHOLD and not self.timeout_started:
+            start_timer(T_CLAIM_MS, on_expiry=trigger_phase_6)
+            self.timeout_started = true
+        drop packet  # Prevent endless re-circulation
 
-   ON TIMER T\_window EXPIRY (no valid objection received):  
-       self.mode \= LEADER  
-       self.epoch\_counter \= 0  
-       persist\_to\_EEPROM(self.epoch\_counter)   // section 4.5, write-on-advance only  
-       start LEADER\_HEARTBEAT loop (PHASE 9\)
+    # 3. Case B: Received strictly better candidate (Higher score or deterministic ID tie-break)
+    elif (election_packet.score > self.best_known_score) or \
+         (election_packet.score == self.best_known_score and election_packet.origin_id > self.best_known_origin):
+        
+        # Verify master score tag to prevent score fabrication
+        if not verify_hmac(election_packet.origin_tag, self.k_master, 
+                           election_packet.score || election_packet.origin_id):
+            drop packet
 
-// \============================================================  
-// PHASE 9 — PASSTHROUGH MODE  
-// \============================================================  
-10\. while self.mode \== PASSTHROUGH:  
-        if self.leader\_id \!= null and neighbour\_table\[self.leader\_id\].countdown\_timer \> 0:  
-            // fast path: known active leader, no election needed  
-            on receive election\_packet or claimant\_packet:  
-                apply PHASE 4 / PHASE 7 suppression \+ relay rules  
-                optionally reply with cached leader\_id  
-        else:  
-            // no known active leader — still relay per suppression rules  
-            // still eligible to emit an objection\_packet if a locally  
-            // computed score turns out higher than an in-flight claimant
+        # Adopt superior candidate
+        self.best_known_score  = election_packet.score
+        self.best_known_origin = election_packet.origin_id
+        self.echo_count        = 0
+        self.timeout_started   = false  # Disarm any active claim timer
+        self.mode              = PASSTHROUGH
 
-// \============================================================  
-// PHASE 10 — LEADER\_ACTIVE / HEARTBEAT  
-// \============================================================  
-11\. LEADER loop (self.mode \== LEADER):  
-        every HEARTBEAT\_PERIOD:  
-            self.epoch\_counter \+= 1  
-            leader\_heartbeat \= {  
-                counter: self.epoch\_counter,  
-                leader\_id: self.id,  
-                hmac\_counter: hmac(...),  
-                hmac\_leader\_id: hmac(...)  
-            }  
-            broadcast leader\_heartbeat to ring neighbours  
-            persist\_to\_EEPROM(self.epoch\_counter)   // only on advance, wear-leveling
+        # Forward updated candidate packet to all other neighbors
+        for next_neighbor in self.neighbour_list:
+            if next_neighbor != neighbor_id:
+                forward_packet = copy(election_packet)
+                forward_packet.replayer_id = self.id
+                forward_packet.timestamp   = current_time_ms()
+                forward_packet.link_tag    = HMAC_SHA256(self.neighbour_table[next_neighbor].K_AB,
+                                                         self.id || forward_packet.timestamp)[:16]
+                send(forward_packet, destination=next_neighbor)
 
-    ALL OTHER NODES, on valid leader\_heartbeat:  
-        verify hmac \+ counter freshness (must be \> last seen counter, replay protection)  
-        neighbour\_table\[leader\_id\].countdown\_timer \= SESSION\_TTL   // section 3.3  
-        self.leader\_id \= leader\_id   // cache for passthrough fast path
+    # 4. Case C: Suboptimal or redundant candidate
+    else:
+        drop packet  # Suppress lower priority claims
+```
 
-// \============================================================  
-// PHASE 11 — SESSION EXPIRY / RE-AUTHENTICATION (background, all nodes)  
-// \============================================================  
-12\. every epoch tick:  
-        for each neighbour in neighbour\_table:  
-            neighbour.countdown\_timer \-= 1  
-            if neighbour.countdown\_timer \== 0:  
-                initiate HELLO handshake with neighbour  
-                if success:  
-                    neighbour.countdown\_timer \= SESSION\_TTL  
-                    neighbour.penalty\_count \= 0  
-                else:  
-                    delete neighbour\_table\[neighbour\]   // full purge, section 3.3
+### Phase 5 & 6: Claim Window & Formal Leadership Claim
+```python
+# Triggered on T_claim timer expiry at candidate node
+ON TIMER T_CLAIM_MS EXPIRY:
+    # Abort if a higher candidate was received during T_claim
+    if self.best_known_origin != self.id:
+        self.mode = PASSTHROUGH
+        return
 
-// \============================================================  
-// PHASE 12 — LINK FAILURE / PARTITION HANDLING  
-// \============================================================  
-13\. ON detect severed link with neighbour N:  
-        find\_leader\_packet \= { requester\_id: self.id, lost\_neighbour\_id: N, time, hmac }  
-        broadcast find\_leader\_packet along ring (both directions)
+    # Broadcast definitive CLAIM packet
+    self.mode = CLAIMING
+    for neighbor_id in self.neighbour_list:
+        claim_packet = {
+            type        : MSG_CLAIM,
+            origin_id   : self.id,
+            score       : self.internal_score,
+            origin_tag  : HMAC_SHA256(self.k_master, "CLAIM" || self.id || self.internal_score)[:16],
+            timestamp   : current_time_ms(),
+            link_tag    : HMAC_SHA256(self.neighbour_table[neighbor_id].K_AB, self.id || timestamp)[:16]
+        }
+        send(claim_packet, destination=neighbor_id)
 
-        if find\_leader\_packet (matching request) received from BOTH ring directions:  
-            // same segment — loop closed, no partition  
-            terminate search
+    # Open final claim objection window
+    start_timer(T_WINDOW_MS, on_expiry=trigger_phase_8)
+```
 
-        else if leader\_ack received on one side but the other times out:  
-            // segmentation confirmed  
-            self.leader\_id \= null  
-            self.mode \= ELECTION or PASSTHROUGH   // per PHASE 2 odds recomputation  
-            trigger local re-election within the disconnected segment (goto PHASE 2\)
+### Phase 7: Claim Propagation & Vote Locking (Follower Nodes)
+```python
+ON RECEIVE claim_packet FROM neighbor_id:
+    if not verify_hmac(claim_packet.link_tag, self.neighbour_table[neighbor_id].K_AB):
+        drop packet
+    if not verify_hmac(claim_packet.origin_tag, self.k_master):
+        drop packet
 
-// \============================================================  
-// PHASE 13 — NETWORK MERGING / LEADER RESIGNATION (leader only)  
-// \============================================================  
-14\. ON receive join\_request (forwarded to active leader per section 3.5):  
-        join\_request\_count \+= 1  
-        if join\_request\_count \> RESIGNATION\_THRESHOLD:  
-            broadcast resignation\_packet { leader\_id: self.id, hmac }  
-            self.mode \= PASSTHROUGH  
-            self.leader\_id \= null  
-            trigger GLOBAL\_RE\_ELECTION across combined topology (goto PHASE 2, all nodes)
+    # Forward claim across remaining topology
+    for next_neighbor in self.neighbour_list:
+        if next_neighbor != neighbor_id:
+            forward_claim = copy(claim_packet)
+            forward_claim.link_tag = HMAC_SHA256(self.neighbour_table[next_neighbor].K_AB, 
+                                                 self.id || current_time_ms())[:16]
+            send(forward_claim, destination=next_neighbor)
 
-// \============================================================  
-// PHASE 14 — DYNAMIC CONNECTION TRACKING (background, all nodes, section 3.7)  
-// \============================================================  
-15\. every AMBIENT\_HEARTBEAT\_PERIOD:  
-        presence\_heartbeat \= { node\_id: self.id, leader\_id: self.leader\_id, sequence: seq++ }  
-        broadcast presence\_heartbeat (unauthenticated, unaddressed)
+    # Commit local vote to candidate for the duration of T_window
+    self.vote_locked = true
+    self.vote_origin = claim_packet.origin_id
+    start_timer(T_WINDOW_MS, on_expiry=lambda: clear_vote_lock())
+```
 
-    ON RECEIVE presence\_heartbeat from node M:  
-        if packet.sequence \<= last\_seen\_sequence\[M\]:  
-            drop   // stale/duplicate  
-        if packet.leader\_id \!= self.leader\_id:  
-            drop   // foreign network, ignore for connection tracking  
-        else if self.connection\_table has spare capacity and M not already known:  
-            add M to connection\_table  
-            // topology update only — NOT a trust decision;  
-            // M still cannot derive a valid K\_AB without K\_master \+ shared space
+### Phase 8 & 9: Consensus Finalization & Leader Heartbeats
+```python
+# At claiming node:
+ON TIMER T_WINDOW_MS EXPIRY:
+    if self.mode == CLAIMING and self.best_known_origin == self.id:
+        self.mode          = LEADER
+        self.leader_id     = self.id
+        self.epoch_counter = 0
+        persist_to_eeprom(self.epoch_counter)
+        start_periodic_timer(HEARTBEAT_PERIOD_MS, on_tick=emit_leader_heartbeat)
 
+# Leader periodic heartbeat emission
+def emit_leader_heartbeat():
+    self.epoch_counter += 1
+    persist_to_eeprom(self.epoch_counter)
+    
+    for neighbor_id in self.neighbour_list:
+        heartbeat = {
+            type        : MSG_HEARTBEAT,
+            leader_id   : self.id,
+            epoch_seq   : self.epoch_counter,
+            origin_tag  : HMAC_SHA256(self.k_master, "HB" || self.id || self.epoch_counter)[:16],
+            link_tag    : HMAC_SHA256(self.neighbour_table[neighbor_id].K_AB, 
+                                      self.id || self.epoch_counter)[:16]
+        }
+        send(heartbeat, destination=neighbor_id)
+
+# Follower node heartbeat processing:
+ON RECEIVE heartbeat FROM neighbor_id:
+    if not verify_hmac(heartbeat.link_tag, self.neighbour_table[neighbor_id].K_AB):
+        drop packet
+    if not verify_hmac(heartbeat.origin_tag, self.k_master):
+        drop packet
+
+    # Monotonic freshness check
+    if heartbeat.epoch_seq <= self.last_seen_epoch:
+        drop packet  # Stale/replayed heartbeat
+
+    self.last_seen_epoch = heartbeat.epoch_seq
+    self.leader_id       = heartbeat.leader_id
+    self.mode            = PASSTHROUGH
+
+    # Disarm any pending promotion timers to prevent split-brain dual leaders
+    cancel_timer(T_WINDOW_MS)
+    cancel_timer(T_CLAIM_MS)
+    self.timeout_started = false
+```
+
+---
+
+## PART II: Extended Fault-Tolerance & Resilience Mechanics (Phases 10–14)
+*Extended protocol logic for dynamic edge recovery, partitions, and re-election.*
+
+### Phase 10: Objection Handling & Claim Retraction
+```python
+ON RECEIVE claim_packet AT node possessing higher score:
+    # A node discovers a claimant has claimed leadership, but this node
+    # either has a higher internal score or knows of a higher candidate
+    if (self.internal_score > claim_packet.score) or \
+       (self.best_known_score > claim_packet.score and self.best_known_origin != claim_packet.origin_id):
+
+        higher_candidate = self.id if (self.internal_score > self.best_known_score) else self.best_known_origin
+        higher_score     = max(self.internal_score, self.best_known_score)
+
+        objection_packet = {
+            type            : MSG_OBJECTION,
+            objector_id     : self.id,
+            target_claimant : claim_packet.origin_id,
+            higher_origin   : higher_candidate,
+            higher_score    : higher_score,
+            origin_tag      : HMAC_SHA256(self.k_master, "OBJ" || higher_candidate || higher_score)[:16],
+            timestamp       : current_time_ms()
+        }
+        send(objection_packet, destination=neighbor_id)
+
+ON RECEIVE objection_packet AT claimant node (during T_window):
+    if not verify_hmac(objection_packet.origin_tag, self.k_master):
+        drop packet
+
+    if objection_packet.higher_score > self.internal_score:
+        # Yield leadership claim immediately
+        cancel_timer(T_WINDOW_MS)
+        self.best_known_score  = objection_packet.higher_score
+        self.best_known_origin = objection_packet.higher_origin
+        self.mode              = PASSTHROUGH
+        # Higher candidate will initiate its own claim cycle
+```
+
+### Phase 11: Periodic Session Expiry & 3-Way Re-Authentication
+```python
+# Executed periodically (e.g. every 1 second) on all nodes
+EVERY 1 SECOND:
+    for neighbor_id, entry in list(self.neighbour_table.items()):
+        entry.countdown_timer -= 1
+        
+        # When session TTL expires, trigger 3-way HELLO handshake
+        if entry.countdown_timer <= 0:
+            initiate_hello_handshake(neighbor_id)
+
+def initiate_hello_handshake(neighbor_id):
+    # Step 1: Transmit Challenge Nonce
+    nonce_a = generate_crypto_nonce()
+    send(MSG_HELLO_1, payload={ "nonce_a": nonce_a }, destination=neighbor_id)
+
+ON RECEIVE MSG_HELLO_1:
+    nonce_b = generate_crypto_nonce()
+    mac_b = HMAC_SHA256(self.neighbour_table[sender].K_AB, nonce_a || nonce_b)
+    send(MSG_HELLO_2, payload={ "nonce_b": nonce_b, "mac": mac_b }, destination=sender)
+
+ON RECEIVE MSG_HELLO_2:
+    if verify_hmac(packet.mac, entry.K_AB, nonce_a || packet.nonce_b):
+        mac_a = HMAC_SHA256(entry.K_AB, packet.nonce_b || nonce_a)
+        send(MSG_HELLO_3, payload={ "mac": mac_a }, destination=sender)
+        # Session re-authenticated
+        entry.countdown_timer = SESSION_TTL_S
+        entry.penalty_count   = 0
+    else:
+        entry.penalty_count += 1
+        if entry.penalty_count >= 3:
+            purge_neighbor(sender)  # Sever untrusted link
+```
+
+### Phase 12: Link Severance, Loop Closure & Partition Segmentation
+```python
+ON DETECT SEVERED LINK WITH neighbor N:
+    remove N from self.neighbour_list
+    
+    # Check if network is partitioned or remains a closed loop
+    find_leader_packet = {
+        type        : MSG_FIND_LEADER,
+        requester   : self.id,
+        lost_node   : N,
+        timestamp   : current_time_ms()
+    }
+    broadcast(find_leader_packet)
+
+ON EVALUATION OF PROBE RESPONSES:
+    if probe returned from alternate loop path:
+        # Ring/Mesh remains connected via redundant paths; no partition
+        pass
+    else:
+        # Network partition confirmed: isolated segment
+        self.leader_id = 0xFF
+        self.mode      = PASSTHROUGH
+        # Trigger localized re-election within isolated segment
+        trigger_phase_2_election()
+```
+
+### Phase 13: Partition Re-Merge & Dynamic Leader Resignation
+```python
+# When two previously severed partitions reconnect, their respective leaders
+# will receive conflicting heartbeats or join requests.
+ON RECEIVE FOREIGN HEARTBEAT FROM foreign_leader_id (foreign_leader_id != self.leader_id):
+    if self.mode == LEADER:
+        # Compare leader credentials
+        if foreign_leader_score > self.internal_score or \
+           (foreign_leader_score == self.internal_score and foreign_leader_id > self.id):
+            # Resign in favor of superior partition leader
+            broadcast_resignation(self.id)
+            self.mode      = PASSTHROUGH
+            self.leader_id = foreign_leader_id
+        else:
+            # Maintain leadership; foreign partition will yield upon receiving our heartbeat
+            emit_leader_heartbeat()
+```
+
+### Phase 14: Ambient Presence Tracking & Neighbor Blacklisting
+```python
+EVERY AMBIENT_PERIOD:
+    # Broadcast periodic passive beacon
+    send_unaddressed(MSG_PRESENCE, payload={ "id": self.id, "leader": self.leader_id })
+
+ON DETECT MALFORMED/INVALID FRAME FROM node M:
+    self.neighbour_table[M].penalty_count += 1
+    if self.neighbour_table[M].penalty_count >= PENALTY_THRESHOLD:
+        self.neighbour_table[M].auth_status = SUSPECT
+        # Blacklist physical link; cease forwarding or voting for M
+        drop_all_traffic_from(M)
+```
+
+---
+
+## 3. Wire Frame Formats & Field Layouts
+
+Every frame transmitted over physical serial/radio links conforms to the standard 5-byte header prefixed by Start-of-Frame delimiter `0xA5`:
+
+```
+Byte 0       Byte 1       Byte 2       Byte 3       Byte 4       Bytes 5..(5+Len-1)   Bytes (5+Len)..End
+┌────────────┬────────────┬────────────┬────────────┬────────────┬────────────────────┬────────────────────┐
+│ SOF (0xA5) │ Type (1B)  │ Len (1B)   │ Src ID(1B) │ Dst ID(1B) │ Payload Data (Var) │ HMAC-SHA256 (16B)  │
+└────────────┴────────────┴────────────┴────────────┴────────────┴────────────────────┴────────────────────┘
+```
+
+| Type Code | Hex Value | Name | Payload Data Structure |
+|:---:|:---:|:---|:---|
+| `1` | `0x01` | `MSG_DISCOVERY` | `[Spaces Count (1B)][Space IDs (k B)][Timestamp (4B)]` |
+| `2` | `0x02` | `MSG_ELECTION` | `[Score (2B)][Origin ID (1B)][Origin Tag (16B)][Replayer ID (1B)][Timestamp (4B)]` |
+| `3` | `0x03` | `MSG_CLAIM` | `[Score (2B)][Origin ID (1B)][Origin Tag (16B)][Timestamp (4B)]` |
+| `4` | `0x04` | `MSG_HEARTBEAT` | `[Leader ID (1B)][Epoch Counter (4B)][Origin Tag (16B)]` |
+| `5` | `0x05` | `MSG_OBJECTION` | `[Objector ID (1B)][Higher Score (2B)][Higher Origin (1B)][Origin Tag (16B)]` |
